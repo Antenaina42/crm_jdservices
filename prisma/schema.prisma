@@ -1,0 +1,650 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum RoleEnum {
+  SUPER_ADMIN
+  ADMIN
+  COMMERCIAL
+  COMPTABLE
+  LECTURE_SEULE
+}
+
+enum WorkspaceSlug {
+  automobile
+  network
+}
+
+enum ActivityType {
+  AUTOMOBILE
+  NETWORK
+}
+
+enum ClientStatus {
+  PROSPECT
+  ACTIVE
+  ARCHIVED
+  LEGAL_HOLD
+}
+
+enum DocumentType {
+  QUOTE
+  PROFORMA
+  INVOICE
+  CREDIT_NOTE
+  ADVANCE_PAYMENT
+}
+
+enum DocumentStatus {
+  DRAFT
+  ISSUED
+  SENT
+  DELIVERED
+  ACCEPTED
+  SIGNED
+  REJECTED
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  CANCELLED
+  CREDITED
+  ARCHIVED
+}
+
+enum TransmissionStatus {
+  NOT_SENT
+  READY
+  SUBMITTED
+  ACCEPTED_BY_PLATFORM
+  REJECTED_BY_PLATFORM
+  ERROR
+  UNKNOWN
+}
+
+enum SignatureStatus {
+  DRAFT
+  PENDING
+  VIEWED
+  SIGNED
+  REJECTED
+  EXPIRED
+}
+
+enum PaymentMethod {
+  TRANSFER
+  CARD
+  CASH
+  CHECK
+  OTHER
+}
+
+enum EmailTemplateType {
+  PROFORMA_CREATED
+  PROFORMA_SENT
+  SIGNATURE_REQUEST
+  SIGNATURE_COMPLETED
+  SIGNATURE_REJECTED
+  INVOICE_CREATED
+  INVOICE_SENT
+  PAYMENT_RECEIVED
+  PAYMENT_REMINDER
+  INVOICE_OVERDUE
+}
+
+enum AuditAction {
+  CREATED
+  UPDATED
+  ISSUED
+  SENT
+  VIEWED
+  SIGNED
+  REJECTED
+  CANCELLED
+  CREDITED
+  PAID
+  PARTIALLY_PAID
+  ANONYMIZATION_REQUEST
+  ANONYMIZED
+  DELETED
+}
+
+model Workspace {
+  id                  String        @id @default(cuid())
+  slug                String        @unique // "automobile" | "network"
+  name                String
+  activityType        ActivityType
+  description         String?       @db.Text
+  companyName         String        @default("JD-SERVICES")
+  commercialName      String?
+  legalForm           String        @default("SASU")
+  shareCapital        String?       @default("1 000 €")
+  siren               String        @default("130419377")
+  siret               String        @default("13041937700018")
+  rcsCity             String?       @default("Saint-Priest / Lyon")
+  vatNumber           String        @default("FR130419377")
+  address             String        @default("60 rue de l'égalité")
+  postalCode          String        @default("69800")
+  city                String        @default("Saint-Priest")
+  country             String        @default("France")
+  phone               String        @default("06.25.98.67.23")
+  email               String        @default("contact@jd-services.fr")
+  website             String?       @default("https://jd-services.m-itlevelup.com")
+  logoUrl             String?
+  iban                String?
+  bic                 String?
+  bankName            String?
+  defaultPaymentTerms String?       @default("Acompte 50% à la commande, solde à la livraison.")
+  legalNotice         String?       @db.Text
+  footerText          String?       @db.Text
+  isVatSubject        Boolean       @default(true)
+  invoicePrefix       String        @default("FAC")
+  proformaPrefix      String        @default("PRO")
+  creditNotePrefix    String        @default("AV")
+  quotePrefix         String        @default("DEV")
+  complianceCheck     Boolean       @default(true)
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  users                 WorkspaceUser[]
+  clients               Client[]
+  projects              Project[]
+  serviceCatalogItems   ServiceCatalogItem[]
+  taxRates              TaxRate[]
+  taxRules              TaxRule[]
+  documents             DocumentRecord[]
+  numberSequences       NumberSequence[]
+  payments              Payment[]
+  paymentReminders      PaymentReminder[]
+  storageRecords        DocumentStorageRecord[]
+  emailMessages         EmailMessage[]
+  auditLogs             AuditLog[]
+  electronicReportings  ElectronicReportingRecord[]
+  anonymizationRequests AnonymizationRequest[]
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  firstName    String
+  lastName     String
+  phone        String?
+  role         RoleEnum  @default(COMMERCIAL)
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  workspaceUsers WorkspaceUser[]
+  auditLogs      AuditLog[]
+}
+
+model WorkspaceUser {
+  id                 String    @id @default(cuid())
+  workspaceId        String
+  userId             String
+  role               RoleEnum?
+  canManageDocuments Boolean   @default(true)
+  canSign            Boolean   @default(true)
+  canIssueInvoices   Boolean   @default(true)
+  createdAt          DateTime  @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+}
+
+model Client {
+  id                    String        @id @default(cuid())
+  workspaceId           String
+  clientNumber          String
+  isCompany             Boolean       @default(false)
+  companyName           String?
+  firstName             String
+  lastName              String
+  email                 String
+  phone                 String
+  address               String
+  postalCode            String
+  city                  String
+  country               String        @default("France")
+  deliveryAddress       String?
+  deliveryPostalCode    String?
+  deliveryCity          String?
+  deliveryCountry       String?
+  siren                 String?
+  siret                 String?
+  vatNumber             String?
+  status                ClientStatus  @default(ACTIVE)
+  anonymizedAt          DateTime?
+  anonymizationReason   String?       @db.Text
+  notes                 String?       @db.Text
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  workspace             Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  projects              Project[]
+  documents             DocumentRecord[]
+  payments              Payment[]
+  storageRecords        DocumentStorageRecord[]
+  anonymizationRequests AnonymizationRequest[]
+
+  @@unique([workspaceId, clientNumber])
+  @@index([workspaceId, email])
+  @@index([workspaceId, lastName])
+}
+
+model Project {
+  id                      String    @id @default(cuid())
+  workspaceId             String
+  clientId                String
+  projectNumber           String
+  title                   String
+  type                    String    // Auto: Import, Vente, Rachat, Accompagnement | Net: Audit, Installation, Maintenance, M1, M2, M3, Autre
+  status                  String    @default("IN_PROGRESS") // DRAFT, IN_PROGRESS, WAITING_PAYMENT, COMPLETED, CANCELLED
+  
+  // Specific Automobile Fields
+  vehicleMake             String?
+  vehicleModel            String?
+  vehicleVersion          String?
+  vehicleYear             Int?
+  vehicleVin              String?
+  vehiclePlate            String?
+  vehicleMileage          Int?
+  vehicleFuel             String?
+  vehicleGearbox          String?
+  vehicleOriginCountry    String?
+  vehicleAdLink           String?   @db.Text
+  vehiclePurchasePrice    Float?
+  vehicleNotes            String?   @db.Text
+
+  // Specific Network Fields
+  networkWorkstationsCount Int?
+  networkUsersCount        Int?
+  networkSitesCount        Int?
+  networkServers           String?  @db.Text
+  networkFirewall          String?
+  networkSwitches          String?
+  networkWifi              String?
+  networkVpn               String?
+  networkVlan              String?
+  networkBackup            String?
+  networkPlanLevel         String?  // M1, M2, M3
+  networkNotes             String?  @db.Text
+
+  notes                   String?   @db.Text
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  workspace               Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  client                  Client                  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  documents               DocumentRecord[]
+  storageRecords          DocumentStorageRecord[]
+
+  @@unique([workspaceId, projectNumber])
+  @@index([workspaceId, clientId])
+}
+
+model ServiceCatalogItem {
+  id             String    @id @default(cuid())
+  workspaceId    String
+  code           String
+  category       String
+  name           String
+  description    String?   @db.Text
+  unit           String    @default("Forfait") // Forfait, Unité, Jour, Heure, Mois
+  defaultPriceHt Float     @default(0)
+  defaultTaxRate Float     @default(20.0)
+  frequency      String    @default("PONCTUELLE") // PONCTUELLE, MENSUELLE, TRIMESTRIELLE, ANNUELLE
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, code])
+  @@index([workspaceId, category])
+}
+
+model TaxRate {
+  id             String    @id @default(cuid())
+  workspaceId    String
+  name           String
+  rate           Float     // 20.0, 10.0, 5.5, 0.0
+  country        String    @default("FR")
+  type           String    @default("STANDARD") // STANDARD, REDUCED, ZERO, EXEMPT
+  effectiveFrom  DateTime  @default(now())
+  effectiveTo    DateTime?
+  isActive       Boolean   @default(true)
+  legalMention   String?   @db.Text
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, rate])
+}
+
+model TaxRule {
+  id                      String    @id @default(cuid())
+  workspaceId             String
+  name                    String
+  sellerCountry           String    @default("FR")
+  customerCountry         String    @default("FR")
+  customerType            String    @default("B2B") // B2B, B2C
+  operationType           String    @default("SERVICES") // SERVICES, GOODS, MIXED
+  taxRate                 Float     @default(20.0)
+  requiresTaxVerification Boolean   @default(false)
+  legalMention            String?   @db.Text
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  workspace               Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, customerType])
+}
+
+model DocumentRecord {
+  id                    String              @id @default(cuid())
+  workspaceId           String
+  clientId              String
+  projectId             String?
+  documentType          DocumentType
+  documentNumber        String
+  sequentialIndex       Int
+  year                  Int
+  status                DocumentStatus      @default(DRAFT)
+  transmissionStatus    TransmissionStatus  @default(NOT_SENT)
+  complianceStatus      String              @default("VALID") // VALID, WARNING, REJECTED
+  complianceErrors      String?             @db.Text
+  
+  // Relations between documents (e.g. Proforma -> Facture, Facture -> Avoir)
+  originalInvoiceId     String?
+  proformaId            String?
+
+  date                  DateTime            @default(now())
+  operationDate         DateTime?
+  dueDate               DateTime
+  validityDays          Int                 @default(30)
+  paymentTerms          String?             @default("Acompte 50% à la commande, solde à la livraison.")
+  notes                 String?             @db.Text // Public customer notes, e.g. "Carburant aller/retour + péage en SUS"
+  internalNotes         String?             @db.Text // Reserved box, e.g. "Cadre réservé JD-Services: La voiture sera tractée..."
+  specialMentions       String?             @db.Text // Legal footer mentions
+
+  totalHt               Float               @default(0)
+  totalTax              Float               @default(0)
+  totalTtc              Float               @default(0)
+  totalPaid             Float               @default(0)
+  balanceDue            Float               @default(0)
+  advancePercentage     Float               @default(0) // e.g. 50%
+
+  isImmutable           Boolean             @default(false) // Set to true once ISSUED
+  documentHash          String?             // SHA-256 canonical hash
+  snapshotSellerJson    String?             @db.Text // Immutable seller details at issuance
+  snapshotClientJson    String?             @db.Text // Immutable client details at issuance
+  snapshotTaxRulesJson  String?             @db.Text // Immutable tax breakdown at issuance
+
+  issuedAt              DateTime?
+  issuedById            String?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  workspace             Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  client                Client                      @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  project               Project?                    @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  originalInvoice       DocumentRecord?             @relation("InvoiceCreditNotes", fields: [originalInvoiceId], references: [id], onDelete: Restrict)
+  creditNotes           DocumentRecord[]            @relation("InvoiceCreditNotes")
+
+  lines                 DocumentLine[]
+  payments              Payment[]
+  signatureRequests     SignatureRequest[]
+  emailMessages         EmailMessage[]
+  reminders             PaymentReminder[]
+  auditLogs             AuditLog[]
+  storageRecords        DocumentStorageRecord[]
+  electronicReportings  ElectronicReportingRecord[]
+
+  @@unique([workspaceId, documentNumber])
+  @@index([workspaceId, documentType])
+  @@index([workspaceId, status])
+  @@index([workspaceId, clientId])
+  @@index([workspaceId, year])
+}
+
+model DocumentLine {
+  id                  String         @id @default(cuid())
+  documentId          String
+  sortOrder           Int            @default(0)
+  designation         String         @db.Text
+  description         String?        @db.Text
+  quantity            Float          @default(1)
+  unit                String         @default("Forfait")
+  unitPriceHt         Float          @default(0)
+  taxRate             Float          @default(20.0) // Frozen tax snapshot
+  taxRateName         String?        @default("TVA 20%")
+  totalHt             Float          @default(0)
+  totalTax            Float          @default(0)
+  totalTtc            Float          @default(0)
+  taxExemptionReason  String?
+
+  document            DocumentRecord @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+}
+
+model NumberSequence {
+  id           String       @id @default(cuid())
+  workspaceId  String
+  documentType DocumentType
+  year         Int
+  prefix       String
+  lastNumber   Int          @default(0)
+
+  workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, documentType, year])
+}
+
+model SignatureRequest {
+  id                 String           @id @default(cuid())
+  workspaceId        String
+  documentId         String
+  token              String           @unique
+  provider           String           @default("mock") // mock, yousign, docusign, universign
+  externalRequestId  String?
+  status             SignatureStatus  @default(PENDING)
+  signerType         String           @default("CLIENT") // CLIENT | SELLER
+  signerName         String
+  signerEmail        String
+  signerPhone        String?
+  expiresAt          DateTime
+  viewedAt           DateTime?
+  signedAt           DateTime?
+  rejectedAt         DateTime?
+  rejectionReason    String?          @db.Text
+  ipAddress          String?
+  userAgent          String?          @db.Text
+  signedPdfHash      String?
+  evidenceJson       String?          @db.Text
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  document           DocumentRecord   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  events             SignatureEvent[]
+
+  @@index([workspaceId, status])
+  @@index([token])
+}
+
+model SignatureEvent {
+  id                 String           @id @default(cuid())
+  signatureRequestId String
+  eventType          String           // CREATED, SENT, VIEWED, SIGNED, REJECTED, EXPIRED
+  ipAddress          String?
+  userAgent          String?          @db.Text
+  payloadJson        String?          @db.Text
+  timestamp          DateTime         @default(now())
+
+  signatureRequest   SignatureRequest @relation(fields: [signatureRequestId], references: [id], onDelete: Cascade)
+
+  @@index([signatureRequestId])
+}
+
+model Payment {
+  id            String         @id @default(cuid())
+  workspaceId   String
+  documentId    String
+  clientId      String
+  amount        Float
+  paymentDate   DateTime       @default(now())
+  paymentMethod PaymentMethod  @default(TRANSFER)
+  reference     String?
+  notes         String?        @db.Text
+  receivedById  String?
+  createdAt     DateTime       @default(now())
+
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  document      DocumentRecord @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  client        Client         @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  @@index([workspaceId, documentId])
+  @@index([workspaceId, clientId])
+}
+
+model PaymentReminder {
+  id            String         @id @default(cuid())
+  workspaceId   String
+  documentId    String
+  reminderLevel Int            @default(1) // 1, 2, 3
+  sentAt        DateTime       @default(now())
+  sentById      String?
+  channel       String         @default("EMAIL")
+  status        String         @default("SENT")
+  content       String?        @db.Text
+
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  document      DocumentRecord @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, documentId])
+}
+
+model DocumentStorageRecord {
+  id             String          @id @default(cuid())
+  workspaceId    String
+  clientId       String?
+  projectId      String?
+  documentId     String?
+  name           String
+  documentType   String          // PROFORMA, FACTURE, AVOIR, CONTRAT, DEVIS, BON_COMMANDE, JUSTIFICATIF, VEHICULE, RESEAU, AUTRE
+  mimeType       String          @default("application/pdf")
+  fileSize       Int             @default(0)
+  filePath       String
+  hashSha256     String?
+  retentionYears Int             @default(10)
+  legalHold      Boolean         @default(false)
+  uploadedById   String?
+  createdAt      DateTime        @default(now())
+
+  workspace      Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  client         Client?         @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  project        Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  document       DocumentRecord? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, documentType])
+}
+
+model EmailMessage {
+  id                String            @id @default(cuid())
+  workspaceId       String
+  documentId        String?
+  templateType      EmailTemplateType
+  recipientEmail    String
+  recipientName     String
+  subject           String
+  bodyHtml          String            @db.Text
+  status            String            @default("SENT") // QUEUED, SENT, FAILED, DELIVERED, OPENED
+  sentAt            DateTime          @default(now())
+  openedAt          DateTime?
+  provider          String            @default("mock")
+  providerMessageId String?
+  errorMessage      String?           @db.Text
+  createdAt         DateTime          @default(now())
+
+  workspace         Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  document          DocumentRecord?   @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, documentId])
+}
+
+model AuditLog {
+  id              String         @id @default(cuid())
+  workspaceId     String?
+  userId          String?
+  userEmail       String?
+  userRole        String?
+  action          AuditAction
+  entityType      String         // Document, Client, Project, User, TaxRate, Setting
+  entityId        String
+  entityReference String?        // Document number or client name
+  oldValueJson    String?        @db.Text
+  newValueJson    String?        @db.Text
+  ipAddress       String?
+  userAgent       String?        @db.Text
+  timestamp       DateTime       @default(now())
+
+  workspace       Workspace?      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user            User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  document        DocumentRecord? @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, timestamp])
+  @@index([workspaceId, action])
+  @@index([entityType, entityId])
+}
+
+model ElectronicReportingRecord {
+  id                 String             @id @default(cuid())
+  workspaceId        String
+  documentId         String
+  transactionType    String             @default("B2B_DOMESTIC") // B2B_DOMESTIC, B2B_INTRA, B2C_DOMESTIC, B2B_EXPORT
+  transmissionFormat String             @default("FACTUR_X")     // PEPPOL_BIS3, UBL_2_1, CII, FACTUR_X
+  amountHt           Float
+  taxAmount          Float
+  amountTtc          Float
+  paymentStatus      String             @default("UNPAID")       // PAID, UNPAID, PARTIAL
+  paymentDate        DateTime?
+  customerType       String             @default("COMPANY")      // COMPANY, INDIVIDUAL
+  customerCountry    String             @default("France")
+  status             TransmissionStatus @default(NOT_SENT)
+  submittedAt        DateTime?
+  providerReference  String?
+  rawResponseJson    String?            @db.Text
+  createdAt          DateTime           @default(now())
+
+  workspace          Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  document           DocumentRecord     @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, documentId])
+}
+
+model AnonymizationRequest {
+  id              String    @id @default(cuid())
+  workspaceId     String
+  clientId        String
+  status          String    @default("PENDING") // PENDING, APPROVED, REJECTED
+  reason          String    @db.Text
+  requestedById   String
+  resolvedById    String?
+  resolvedAt      DateTime?
+  resolutionNotes String?   @db.Text
+  createdAt       DateTime  @default(now())
+
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  client          Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status])
+}

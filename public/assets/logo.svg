@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 215 46" width="215" height="46" fill="none">
+  <!-- Typographie Épurée JD-Services -->
+  <text x="0" y="23" font-family="'Plus Jakarta Sans', 'Inter', -apple-system, sans-serif" font-size="22" font-weight="900" letter-spacing="0.5" fill="#111111">JD-Services</text>
+  <text x="1" y="37" font-family="'Inter', -apple-system, sans-serif" font-size="8.4" font-weight="600" letter-spacing="0.25" fill="#6B7280">Services d&apos;accompagnement import automobile</text>
+  <line x1="1" y1="42" x2="205" y2="42" stroke="#E5E7EB" stroke-width="1.5"/>
+</svg>

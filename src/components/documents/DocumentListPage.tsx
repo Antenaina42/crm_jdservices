@@ -243,12 +243,24 @@ export default function DocumentListPage({
                   return (
                     <tr key={doc.id} className="hover:bg-slate-50/80 transition group">
                       <td className="py-3.5 px-4">
-                        <Link
-                          href={`${basePath}/${doc.id}`}
-                          className="font-black text-slate-900 hover:text-blue-600 transition block text-sm"
-                        >
-                          {doc.documentNumber}
-                        </Link>
+                        <div className="flex items-center space-x-1.5">
+                          <Link
+                            href={`${basePath}/${doc.id}`}
+                            className="font-black text-slate-900 hover:text-blue-600 transition block text-sm"
+                          >
+                            {doc.documentNumber}
+                          </Link>
+                          {doc.documentType === "ADVANCE_PAYMENT" && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-blue-100 text-blue-800">
+                              Acompte
+                            </span>
+                          )}
+                          {doc.documentType === "CREDIT_NOTE" && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-red-100 text-red-800">
+                              Avoir
+                            </span>
+                          )}
+                        </div>
                         {doc.isImmutable && (
                           <span className="text-[10px] text-emerald-700 font-semibold flex items-center mt-0.5">
                             <ShieldCheck className="w-3 h-3 mr-0.5 text-emerald-600" />

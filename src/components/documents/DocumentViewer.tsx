@@ -197,7 +197,7 @@ export default function DocumentViewer({
             </button>
           )}
 
-          {onRecordPayment && document.documentType === "INVOICE" && document.status !== "PAID" && (
+          {onRecordPayment && (document.documentType === "INVOICE" || document.documentType === "ADVANCE_PAYMENT") && document.status !== "PAID" && (
             <button
               type="button"
               onClick={onRecordPayment}

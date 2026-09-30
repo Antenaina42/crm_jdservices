@@ -18,6 +18,8 @@ import {
   User,
   Filter,
   X,
+  Trash2,
+  FileSpreadsheet,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 
@@ -115,8 +117,27 @@ export default function ClientListClient({
     }
   };
 
+  const handleDeleteClient = async (clientId: string, clientName: string) => {
+    if (
+      !confirm(
+        `Confirmez-vous la suppression du client "${clientName}" ? (Interdit si des factures sont déjà scellées pour respecter l'obligation légale décennale)`
+      )
+    ) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/clients/${clientId}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erreur suppression client");
+      setClients(clients.filter((c) => c.id !== clientId));
+      alert("Client supprimé avec succès.");
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full">
       {/* Header bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -285,13 +306,29 @@ export default function ClientListClient({
                         </span>
                       </td>
 
-                      <td className="py-3.5 px-4 text-right">
+                      <td className="py-3.5 px-4 text-right space-x-1.5 whitespace-nowrap">
+                        <Link
+                          href={`/${workspaceSlug}/proformas/new?clientId=${client.id}`}
+                          className="inline-flex items-center px-2 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold transition"
+                          title="Créer une proforma pour ce client"
+                        >
+                          <FileSpreadsheet className="w-3 h-3 mr-1" />
+                          Proforma
+                        </Link>
                         <Link
                           href={`/${workspaceSlug}/clients/${client.id}`}
-                          className="inline-flex items-center px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition"
+                          className="inline-flex items-center px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition"
                         >
                           Fiche <ArrowRight className="w-3 h-3 ml-1" />
                         </Link>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteClient(client.id, displayName)}
+                          className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                          title="Supprimer ce client"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </td>
                     </tr>
                   );

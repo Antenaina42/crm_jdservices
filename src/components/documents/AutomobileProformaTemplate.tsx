@@ -82,14 +82,19 @@ export default function AutomobileProformaTemplate({
 
   const isInvoice = document.documentType === "INVOICE";
   const isCreditNote = document.documentType === "CREDIT_NOTE";
+  const isAdvancePayment = document.documentType === "ADVANCE_PAYMENT";
   const docTitle = isCreditNote
     ? "FACTURE D'AVOIR"
+    : isAdvancePayment
+    ? "FACTURE D'ACOMPTE"
     : isInvoice
     ? "FACTURE"
     : "FACTURE PROFORMA";
 
   const docNumberLabel = isCreditNote
     ? "AVOIR N° :"
+    : isAdvancePayment
+    ? "FACTURE D'ACOMPTE N° :"
     : isInvoice
     ? "FACTURE N° :"
     : "FACTURE PROFORMA N° :";
@@ -126,6 +131,11 @@ export default function AutomobileProformaTemplate({
               Document Comptable Définitivement Émis
             </div>
           )}
+          {isAdvancePayment && (
+            <div className="text-[10px] font-extrabold uppercase text-blue-700 tracking-wider mt-0.5">
+              Facture d&apos;Acompte • Art. 289-I-1-c CGI
+            </div>
+          )}
         </div>
       </div>
 
@@ -133,7 +143,7 @@ export default function AutomobileProformaTemplate({
       <div className="mb-6">
         <div className="flex flex-wrap items-center justify-between text-xs font-bold text-slate-900 mb-6 pb-2 border-b border-slate-100">
           <div>DATE : {formattedDate}</div>
-          {!isInvoice && !isCreditNote ? (
+          {!isInvoice && !isCreditNote && !isAdvancePayment ? (
             <div className="inline-flex items-center px-3 py-1 rounded-md bg-amber-50 border border-amber-300 text-amber-900 font-extrabold text-xs shadow-2xs">
               <span className="mr-1.5">⏳</span> Validité de l&apos;offre : 1 mois
             </div>

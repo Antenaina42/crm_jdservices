@@ -80,7 +80,15 @@ export default function NetworkProformaTemplate({
 }: NetworkProformaTemplateProps) {
   const clientTitle = client.companyName || `${client.firstName} ${client.lastName}`.trim();
   const isInvoice = document.documentType === "INVOICE";
-  const docTitle = isInvoice ? "FACTURE D'INFRASTRUCTURE RÉSEAU" : "FACTURE PROFORMA RÉSEAU";
+  const isCreditNote = document.documentType === "CREDIT_NOTE";
+  const isAdvancePayment = document.documentType === "ADVANCE_PAYMENT";
+  const docTitle = isCreditNote
+    ? "FACTURE D'AVOIR"
+    : isAdvancePayment
+    ? "FACTURE D'ACOMPTE"
+    : isInvoice
+    ? "FACTURE"
+    : "FACTURE PROFORMA RÉSEAU";
 
   return (
     <div className="print-page bg-white text-slate-900 font-sans max-w-[850px] mx-auto p-8 sm:p-12 shadow-lg border border-slate-200 print:shadow-none print:border-none print:p-0">
@@ -116,9 +124,14 @@ export default function NetworkProformaTemplate({
           <div className="text-xs text-slate-500 mt-0.5">
             Émis le : {formatDateFr(document.date)}
           </div>
-          {!isInvoice && (
+          {!isInvoice && !isCreditNote && !isAdvancePayment && (
             <div className="inline-flex items-center px-2 py-0.5 mt-1 rounded bg-amber-50 border border-amber-300 text-amber-900 font-extrabold text-[11px]">
               ⏳ Validité de l&apos;offre : 1 mois
+            </div>
+          )}
+          {isAdvancePayment && (
+            <div className="inline-flex items-center px-2 py-0.5 mt-1 rounded bg-blue-50 border border-blue-300 text-blue-900 font-extrabold text-[11px]">
+              Facture d&apos;acompte • Art. 289-I-1-c CGI
             </div>
           )}
           {document.dueDate && (

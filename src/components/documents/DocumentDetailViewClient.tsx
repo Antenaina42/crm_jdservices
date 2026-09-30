@@ -57,6 +57,34 @@ export default function DocumentDetailViewClient({
   const isProforma = doc.documentType === "PROFORMA";
   const isInvoice = doc.documentType === "INVOICE";
   const isCreditNote = doc.documentType === "CREDIT_NOTE";
+  const isAdvancePayment = doc.documentType === "ADVANCE_PAYMENT";
+  const isPayable = isInvoice || isAdvancePayment;
+
+  // Conversion Modal State (Full, Advance, Balance)
+  const [showConvertModal, setShowConvertModal] = useState(false);
+  const [conversionType, setConversionType] = useState<"FULL" | "ADVANCE" | "BALANCE">("FULL");
+  const [advanceAmount, setAdvanceAmount] = useState<number>(
+    isAuto ? 500 : Math.round(doc.totalTtc * 0.3 * 100) / 100
+  );
+  const [advanceDescription, setAdvanceDescription] = useState(
+    isAuto ? "Règlement 1 - acompte de réservation" : "Acompte contractuel (30%)"
+  );
+  const [convertSubmitting, setConvertSubmitting] = useState(false);
+
+  // Email Modal State
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [emailRecipient, setEmailRecipient] = useState(doc.client?.email || "");
+  const [emailSubject, setEmailSubject] = useState(
+    doc.documentType === "PROFORMA"
+      ? `Facture Proforma n° ${doc.documentNumber} — ${workspace.name}`
+      : `Facture n° ${doc.documentNumber} — ${workspace.name}`
+  );
+  const [emailMessage, setEmailMessage] = useState(
+    `Bonjour,\n\nVeuillez trouver ci-joint votre ${
+      doc.documentType === "PROFORMA" ? "facture proforma" : "facture"
+    } n° ${doc.documentNumber} d'un montant total de ${formatCurrency(doc.totalTtc)}.\n\nRestant à votre entière disposition pour tout renseignement complémentaire.\n\nCordialement,\n${workspace.name}`
+  );
+  const [emailSubmitting, setEmailSubmitting] = useState(false);
 
   // Signature active
   const activeSig = doc.signatureRequests?.find((s: any) => s.status === "SIGNED") || doc.signatureRequests?.[0];
@@ -91,19 +119,34 @@ export default function DocumentDetailViewClient({
     }
   };
 
-  const handleSendEmail = async () => {
-    setActionLoading(true);
+  const handleSendEmailClick = () => {
+    setEmailRecipient(doc.client?.email || "");
+    setShowEmailModal(true);
+  };
+
+  const handleSendEmailSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEmailSubmitting(true);
     setFeedback(null);
     try {
-      const res = await fetch(`/api/documents/${doc.id}/send-email`, { method: "POST" });
+      const res = await fetch(`/api/documents/${doc.id}/send-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipientEmail: emailRecipient,
+          subject: emailSubject,
+          message: emailMessage,
+        }),
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erreur lors de l'envoi");
       setFeedback({ type: "success", message: data.message });
+      setShowEmailModal(false);
       router.refresh();
     } catch (err: any) {
       setFeedback({ type: "error", message: err.message });
     } finally {
-      setActionLoading(false);
+      setEmailSubmitting(false);
     }
   };
 
@@ -127,20 +170,31 @@ export default function DocumentDetailViewClient({
     }
   };
 
-  const handleConvertToInvoice = async () => {
-    if (!confirm("Voulez-vous générer la Facture Comptable Définitive à partir de cette proforma ?")) {
-      return;
-    }
-    setActionLoading(true);
+  const handleConvertClick = () => {
+    setShowConvertModal(true);
+  };
+
+  const handleConvertSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setConvertSubmitting(true);
     setFeedback(null);
     try {
-      const res = await fetch(`/api/documents/${doc.id}/convert-to-invoice`, { method: "POST" });
+      const res = await fetch(`/api/documents/${doc.id}/convert-to-invoice`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          conversionType,
+          advanceAmountTtc: advanceAmount,
+          advanceDescription,
+        }),
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erreur conversion");
+      setShowConvertModal(false);
       router.push(`/${workspaceSlug}/invoices/${data.invoice.id}`);
     } catch (err: any) {
       setFeedback({ type: "error", message: err.message });
-      setActionLoading(false);
+      setConvertSubmitting(false);
     }
   };
 
@@ -258,7 +312,7 @@ export default function DocumentDetailViewClient({
         {/* Action Header Buttons */}
         <div className="flex flex-wrap items-center gap-2">
           {/* BOUTON PAYER POUR FACTURES */}
-          {isInvoice && doc.status !== "PAID" && (
+          {isPayable && doc.status !== "PAID" && (
             <button
               type="button"
               onClick={() => {
@@ -277,7 +331,7 @@ export default function DocumentDetailViewClient({
             <button
               type="button"
               disabled={actionLoading}
-              onClick={handleConvertToInvoice}
+              onClick={handleConvertClick}
               className="inline-flex items-center px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs shadow-md transition disabled:opacity-50"
             >
               <FileCheck className="w-4 h-4 mr-1.5" />
@@ -337,7 +391,7 @@ export default function DocumentDetailViewClient({
       </div>
 
       {/* RESTE À PAYER BANNER FOR INVOICES */}
-      {isInvoice && (
+      {isPayable && (
         <div className="no-print bg-white p-4 sm:p-5 rounded-3xl border border-slate-200/80 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center space-x-4">
             <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white ${
@@ -454,10 +508,10 @@ export default function DocumentDetailViewClient({
           signerName: "Jean-Désiré Martialino",
           certified: true,
         }}
-        onSendEmail={handleSendEmail}
+        onSendEmail={handleSendEmailClick}
         onRequestSignature={handleRequestSignature}
-        onCreateInvoice={isProforma ? handleConvertToInvoice : undefined}
-        onRecordPayment={isInvoice && doc.status !== "PAID" ? () => setShowPaymentModal(true) : undefined}
+        onCreateInvoice={isProforma ? handleConvertClick : undefined}
+        onRecordPayment={isPayable && doc.status !== "PAID" ? () => setShowPaymentModal(true) : undefined}
       />
 
       {/* MODAL ENREGISTRER PAIEMENT */}
@@ -569,6 +623,251 @@ export default function DocumentDetailViewClient({
                   className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm disabled:opacity-50"
                 >
                   {paymentSubmitting ? "Validation..." : "Valider le Règlement"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CONVERTIR EN FACTURE LÉGALE */}
+      {showConvertModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center space-x-2">
+                <FileCheck className="w-5 h-5 text-blue-600" />
+                <h3 className="font-black text-slate-900 text-base">Générer la Facture Comptable</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowConvertModal(false)}
+                className="text-slate-400 hover:text-slate-700"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3 bg-blue-50/70 border border-blue-100 rounded-2xl text-xs space-y-1">
+              <div className="flex justify-between text-slate-600">
+                <span>Dossier Proforma :</span>
+                <strong className="text-slate-900">{doc.documentNumber}</strong>
+              </div>
+              <div className="flex justify-between text-slate-600">
+                <span>Total Devis TTC :</span>
+                <span className="font-mono font-bold text-slate-900">{formatCurrency(doc.totalTtc)}</span>
+              </div>
+            </div>
+
+            <form onSubmit={handleConvertSubmit} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-slate-800 mb-2">Type de facture à émettre :</label>
+                <div className="grid grid-cols-1 gap-2.5">
+                  <label className={`p-3 rounded-2xl border cursor-pointer transition flex items-start space-x-3 ${
+                    conversionType === "FULL" ? "border-blue-600 bg-blue-50/40 shadow-xs" : "border-slate-200 hover:bg-slate-50"
+                  }`}>
+                    <input
+                      type="radio"
+                      name="conversionType"
+                      value="FULL"
+                      checked={conversionType === "FULL"}
+                      onChange={() => setConversionType("FULL")}
+                      className="mt-0.5 text-blue-600 focus:ring-blue-500"
+                    />
+                    <div>
+                      <div className="font-black text-slate-900 text-sm">Facture Complète (100%)</div>
+                      <div className="text-slate-500 text-[11px] mt-0.5">
+                        Facturation intégrale de la prestation ({formatCurrency(doc.totalTtc)} TTC).
+                      </div>
+                    </div>
+                  </label>
+
+                  <label className={`p-3 rounded-2xl border cursor-pointer transition flex items-start space-x-3 ${
+                    conversionType === "ADVANCE" ? "border-blue-600 bg-blue-50/40 shadow-xs" : "border-slate-200 hover:bg-slate-50"
+                  }`}>
+                    <input
+                      type="radio"
+                      name="conversionType"
+                      value="ADVANCE"
+                      checked={conversionType === "ADVANCE"}
+                      onChange={() => setConversionType("ADVANCE")}
+                      className="mt-0.5 text-blue-600 focus:ring-blue-500"
+                    />
+                    <div>
+                      <div className="font-black text-slate-900 text-sm">Facture d&apos;Acompte</div>
+                      <div className="text-slate-500 text-[11px] mt-0.5">
+                        Facture d&apos;acompte officielle conforme art. 289-I-1-c du CGI (ex: acompte de réservation).
+                      </div>
+                    </div>
+                  </label>
+
+                  <label className={`p-3 rounded-2xl border cursor-pointer transition flex items-start space-x-3 ${
+                    conversionType === "BALANCE" ? "border-blue-600 bg-blue-50/40 shadow-xs" : "border-slate-200 hover:bg-slate-50"
+                  }`}>
+                    <input
+                      type="radio"
+                      name="conversionType"
+                      value="BALANCE"
+                      checked={conversionType === "BALANCE"}
+                      onChange={() => setConversionType("BALANCE")}
+                      className="mt-0.5 text-blue-600 focus:ring-blue-500"
+                    />
+                    <div>
+                      <div className="font-black text-slate-900 text-sm">Facture de Solde</div>
+                      <div className="text-slate-500 text-[11px] mt-0.5">
+                        Facture finale déduisant automatiquement tous les acomptes précédemment facturés.
+                      </div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {conversionType === "ADVANCE" && (
+                <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="font-bold text-slate-700">Montant de l&apos;Acompte TTC (€)</label>
+                      <div className="flex space-x-1">
+                        <button
+                          type="button"
+                          onClick={() => setAdvanceAmount(500)}
+                          className="px-2 py-0.5 rounded bg-slate-200 hover:bg-slate-300 text-[10px] font-bold"
+                        >
+                          500 €
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAdvanceAmount(Math.round(doc.totalTtc * 0.3 * 100) / 100)}
+                          className="px-2 py-0.5 rounded bg-slate-200 hover:bg-slate-300 text-[10px] font-bold"
+                        >
+                          30%
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAdvanceAmount(Math.round(doc.totalTtc * 0.5 * 100) / 100)}
+                          className="px-2 py-0.5 rounded bg-slate-200 hover:bg-slate-300 text-[10px] font-bold"
+                        >
+                          50%
+                        </button>
+                      </div>
+                    </div>
+                    <input
+                      type="number"
+                      step="0.01"
+                      required
+                      value={advanceAmount}
+                      onChange={(e) => setAdvanceAmount(Number(e.target.value))}
+                      className="w-full p-2 rounded-xl border border-slate-200 font-mono font-bold text-sm bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Libellé de l&apos;acompte</label>
+                    <input
+                      type="text"
+                      value={advanceDescription}
+                      onChange={(e) => setAdvanceDescription(e.target.value)}
+                      className="w-full p-2 rounded-xl border border-slate-200 bg-white"
+                      placeholder="ex: Règlement 1 - acompte de réservation"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end space-x-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowConvertModal(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-bold"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={convertSubmitting}
+                  className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-sm disabled:opacity-50"
+                >
+                  {convertSubmitting ? "Génération..." : "Confirmer et Créer la Facture"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL ENVOI EMAIL PREVIEW */}
+      {showEmailModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center space-x-2">
+                <Mail className="w-5 h-5 text-blue-600" />
+                <h3 className="font-black text-slate-900 text-base">Transmission par E-mail</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowEmailModal(false)}
+                className="text-slate-400 hover:text-slate-700"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSendEmailSubmit} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Destinataire (Email Client)</label>
+                <input
+                  type="email"
+                  required
+                  value={emailRecipient}
+                  onChange={(e) => setEmailRecipient(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 text-slate-900 font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Objet de l&apos;e-mail</label>
+                <input
+                  type="text"
+                  required
+                  value={emailSubject}
+                  onChange={(e) => setEmailSubject(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 text-slate-900 font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Message d&apos;accompagnement</label>
+                <textarea
+                  rows={5}
+                  required
+                  value={emailMessage}
+                  onChange={(e) => setEmailMessage(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 text-slate-900 font-sans leading-relaxed"
+                />
+              </div>
+
+              <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-2xl flex items-center justify-between text-[11px] text-slate-600">
+                <span className="flex items-center">
+                  <FileCheck className="w-4 h-4 text-emerald-600 mr-1.5" />
+                  Pièce jointe : <strong>{doc.documentNumber}.pdf</strong>
+                </span>
+                <span className="font-bold text-slate-800">Lien sécurisé inclus</span>
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowEmailModal(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-bold"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={emailSubmitting}
+                  className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-sm disabled:opacity-50"
+                >
+                  {emailSubmitting ? "Transmission en cours..." : "Envoyer l'E-mail Officiel"}
                 </button>
               </div>
             </form>

@@ -42,7 +42,7 @@ export default function FinancialDashboardClient({
     const rows = invoices.map((inv) => [
       inv.documentNumber,
       formatDateFr(inv.date),
-      inv.client.companyName || `${inv.client.firstName} ${inv.client.lastName}`,
+      `"${(inv.client.companyName || `${inv.client.firstName} ${inv.client.lastName}`).replace(/"/g, '""')}"`,
       inv.totalHt.toFixed(2),
       inv.totalTax.toFixed(2),
       inv.totalTtc.toFixed(2),
@@ -50,16 +50,207 @@ export default function FinancialDashboardClient({
     ]);
 
     const csvContent =
-      "data:text/csv;charset=utf-8," +
-      [headers.join(";"), ...rows.map((e) => e.join(";"))].join("\n");
+      "\uFEFF" + [headers.join(";"), ...rows.map((e) => e.join(";"))].join("\n");
 
-    const encodedUri = encodeURI(csvContent);
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `Factures_${workspaceSlug}_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
+    link.href = url;
+    link.download = `Factures_${workspaceSlug}_${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
-    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  /**
+   * Export Journal des Ventes (Comptabilité Générale Française)
+   * Écritures équilibrées Débit/Crédit :
+   * - 411000 (Clients) : Débit = TTC
+   * - 706000 (Prestations de services) : Crédit = HT
+   * - 445710 (TVA Collectée à 20%) : Crédit = TVA
+   */
+  const exportSalesJournalCsv = () => {
+    const headers = [
+      "Code Journal",
+      "Date Écriture",
+      "Numéro de Pièce",
+      "Numéro de Compte",
+      "Libellé du Compte",
+      "Libellé Écriture",
+      "Débit (€)",
+      "Crédit (€)",
+    ];
+
+    const entries: string[][] = [];
+
+    invoices.forEach((inv) => {
+      const dateStr = new Date(inv.date).toLocaleDateString("fr-FR");
+      const clientLabel = inv.client.companyName || `${inv.client.firstName} ${inv.client.lastName}`;
+      const docLabel = `${inv.documentNumber} - ${clientLabel}`.slice(0, 45);
+
+      // Ligne 1 : Débit Client TTC (411000)
+      entries.push([
+        "VE",
+        dateStr,
+        inv.documentNumber,
+        "411000",
+        "Clients",
+        `"${docLabel}"`,
+        inv.totalTtc.toFixed(2),
+        "0.00",
+      ]);
+
+      // Ligne 2 : Crédit Prestation HT (706000)
+      entries.push([
+        "VE",
+        dateStr,
+        inv.documentNumber,
+        "706000",
+        isAuto ? "Prestations accompagnement automobile" : "Prestations réseaux et infrastructure",
+        `"${docLabel}"`,
+        "0.00",
+        inv.totalHt.toFixed(2),
+      ]);
+
+      // Ligne 3 : Crédit TVA Collectée (445710)
+      if (inv.totalTax > 0) {
+        entries.push([
+          "VE",
+          dateStr,
+          inv.documentNumber,
+          "445710",
+          "TVA collectée 20%",
+          `"${docLabel}"`,
+          "0.00",
+          inv.totalTax.toFixed(2),
+        ]);
+      }
+    });
+
+    const csvContent =
+      "\uFEFF" + [headers.join(";"), ...entries.map((e) => e.join(";"))].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `Journal_Ventes_VE_${workspaceSlug}_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  /**
+   * Export FEC (Fichier des Écritures Comptables conforme DGFIP Art. A.47 A-1)
+   */
+  const exportFec = () => {
+    const fecHeaders = [
+      "JournalCode",
+      "JournalLib",
+      "EcritureNum",
+      "EcritureDate",
+      "CompteNum",
+      "CompteLib",
+      "CompAuxNum",
+      "CompAuxLib",
+      "PieceRef",
+      "PieceDate",
+      "EcritureLib",
+      "Debit",
+      "Credit",
+      "EcritureLet",
+      "DateLet",
+      "ValidDate",
+      "Montantdevise",
+      "Idevise",
+    ];
+
+    const lines: string[] = [];
+    let ecritureNum = 1;
+
+    invoices.forEach((inv) => {
+      const dateIso = new Date(inv.date).toISOString().slice(0, 10).replace(/-/g, "");
+      const clientLabel = (inv.client.companyName || `${inv.client.firstName} ${inv.client.lastName}`).slice(0, 35);
+      const ecritureLib = `${inv.documentNumber} ${clientLabel}`;
+
+      // 411
+      lines.push([
+        "VE",
+        "JOURNAL DES VENTES",
+        String(ecritureNum),
+        dateIso,
+        "41100000",
+        "CLIENTS",
+        inv.client.clientNumber || "CLI001",
+        clientLabel,
+        inv.documentNumber,
+        dateIso,
+        ecritureLib,
+        inv.totalTtc.toFixed(2).replace(".", ","),
+        "0,00",
+        "",
+        "",
+        dateIso,
+        "",
+        "",
+      ].join("\t"));
+
+      // 706
+      lines.push([
+        "VE",
+        "JOURNAL DES VENTES",
+        String(ecritureNum),
+        dateIso,
+        "70600000",
+        "PRESTATIONS DE SERVICES",
+        "",
+        "",
+        inv.documentNumber,
+        dateIso,
+        ecritureLib,
+        "0,00",
+        inv.totalHt.toFixed(2).replace(".", ","),
+        "",
+        "",
+        dateIso,
+        "",
+        "",
+      ].join("\t"));
+
+      // 44571
+      if (inv.totalTax > 0) {
+        lines.push([
+          "VE",
+          "JOURNAL DES VENTES",
+          String(ecritureNum),
+          dateIso,
+          "44571000",
+          "TVA COLLECTEE 20%",
+          "",
+          "",
+          inv.documentNumber,
+          dateIso,
+          ecritureLib,
+          "0,00",
+          inv.totalTax.toFixed(2).replace(".", ","),
+          "",
+          "",
+          dateIso,
+          "",
+          "",
+        ].join("\t"));
+      }
+
+      ecritureNum++;
+    });
+
+    const fecContent = [fecHeaders.join("\t"), ...lines].join("\r\n");
+    const blob = new Blob([fecContent], { type: "text/plain;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    const siren = (workspace.siren || "933618388").replace(/\s/g, "");
+    link.download = `${siren}FEC${new Date().getFullYear()}1231.txt`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -74,14 +265,34 @@ export default function FinancialDashboardClient({
           </p>
         </div>
 
-        <div className="flex items-center space-x-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={exportSalesJournalCsv}
+            className="inline-flex items-center px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition shadow-2xs"
+            title="Exporter le Journal des Ventes (VE) au format CSV pour votre logiciel comptable"
+          >
+            <FileSpreadsheet className="w-4 h-4 mr-1.5" />
+            Journal des Ventes (CSV)
+          </button>
+
+          <button
+            type="button"
+            onClick={exportFec}
+            className="inline-flex items-center px-3.5 py-2 rounded-xl bg-indigo-700 hover:bg-indigo-800 text-white font-bold text-xs transition shadow-2xs"
+            title="Exporter le Fichier des Écritures Comptables conforme DGFIP (Art. A.47 A-1 LPF)"
+          >
+            <Download className="w-4 h-4 mr-1.5" />
+            Export FEC (DGFIP)
+          </button>
+
           <button
             type="button"
             onClick={exportInvoicesCsv}
-            className="inline-flex items-center px-4 py-2 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 transition shadow-2xs"
+            className="inline-flex items-center px-3.5 py-2 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 transition shadow-2xs"
           >
             <Download className="w-4 h-4 mr-1.5" />
-            Exporter CSV Factures
+            Factures CSV
           </button>
         </div>
       </div>

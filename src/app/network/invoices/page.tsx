@@ -10,7 +10,7 @@ export default async function NetworkInvoicesPage() {
   const documents = await prisma.documentRecord.findMany({
     where: {
       workspaceId: workspace.id,
-      documentType: { in: [DocumentType.INVOICE, DocumentType.CREDIT_NOTE] },
+      documentType: { in: [DocumentType.INVOICE, DocumentType.CREDIT_NOTE, DocumentType.ADVANCE_PAYMENT] },
     },
     include: {
       client: true,

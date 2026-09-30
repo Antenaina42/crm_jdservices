@@ -26,6 +26,8 @@ import {
   ExternalLink,
   ChevronRight,
   AlertTriangle,
+  Edit2,
+  X,
 } from "lucide-react";
 import { formatCurrency, formatDateFr } from "@/lib/utils";
 
@@ -55,6 +57,26 @@ export default function ClientDetailClient({
   const [projectTitle, setProjectTitle] = useState("");
   const [projectType, setProjectType] = useState(workspaceSlug === "automobile" ? "Import" : "Audit");
   const [projectSubmitting, setProjectSubmitting] = useState(false);
+
+  // Edit client modal state
+  const [showEditClientModal, setShowEditClientModal] = useState(false);
+  const [editClientData, setEditClientData] = useState({
+    isCompany: client.isCompany,
+    companyName: client.companyName || "",
+    firstName: client.firstName || "",
+    lastName: client.lastName || "",
+    email: client.email || "",
+    phone: client.phone || "",
+    address: client.address || "",
+    postalCode: client.postalCode || "",
+    city: client.city || "",
+    country: client.country || "France",
+    siren: client.siren || "",
+    siret: client.siret || "",
+    vatNumber: client.vatNumber || "",
+    notes: client.notes || "",
+  });
+  const [editClientSubmitting, setEditClientSubmitting] = useState(false);
 
   // Auto specific project fields
   const [vehicleMake, setVehicleMake] = useState("BMW");
@@ -98,6 +120,40 @@ export default function ClientDetailClient({
       alert(err.message);
     } finally {
       setAnonymizing(false);
+    }
+  };
+
+  const handleUpdateClient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEditClientSubmitting(true);
+    try {
+      const res = await fetch(`/api/clients/${client.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editClientData),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erreur modification client");
+      alert("Fiche client mise à jour avec succès.");
+      setShowEditClientModal(false);
+      router.refresh();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setEditClientSubmitting(false);
+    }
+  };
+
+  const handleDeleteProject = async (projectId: string, projTitle: string) => {
+    if (!confirm(`Confirmez-vous la suppression du projet "${projTitle}" ?`)) return;
+    try {
+      const res = await fetch(`/api/projects?id=${projectId}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erreur suppression projet");
+      alert("Projet supprimé avec succès.");
+      router.refresh();
+    } catch (err: any) {
+      alert(err.message);
     }
   };
 
@@ -224,6 +280,15 @@ export default function ClientDetailClient({
             <Plus className="w-4 h-4 mr-1.5" />
             Créer Proforma
           </Link>
+
+          <button
+            type="button"
+            onClick={() => setShowEditClientModal(true)}
+            className="inline-flex items-center px-3.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition"
+          >
+            <Edit2 className="w-3.5 h-3.5 mr-1" />
+            Modifier Fiche
+          </button>
 
           <button
             type="button"
@@ -403,9 +468,19 @@ export default function ClientDetailClient({
                       </div>
                       <div className="text-xs text-slate-400 font-mono mt-0.5">{proj.projectNumber}</div>
                     </div>
-                    <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                      {proj.status}
-                    </span>
+                    <div className="flex items-center space-x-2">
+                      <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        {proj.status}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteProject(proj.id, proj.title)}
+                        className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                        title="Supprimer ce projet"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
 
                   {/* Automobile Project Specs */}
@@ -827,6 +902,227 @@ export default function ClientDetailClient({
                 {anonymizing ? "Traitement..." : "Confirmer l'Anonymisation"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL MODIFIER CLIENT */}
+      {showEditClientModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
+              <div className="flex items-center space-x-2">
+                <Edit2 className="w-5 h-5 text-blue-600" />
+                <h3 className="text-lg font-black text-slate-900">
+                  Modifier la Fiche Client
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowEditClientModal(false)}
+                className="text-slate-400 hover:text-slate-700"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateClient} className="space-y-4 text-xs">
+              <div className="flex items-center space-x-4 mb-2">
+                <label className="flex items-center space-x-2 cursor-pointer font-bold">
+                  <input
+                    type="checkbox"
+                    checked={editClientData.isCompany}
+                    onChange={(e) =>
+                      setEditClientData({ ...editClientData, isCompany: e.target.checked })
+                    }
+                    className="rounded text-blue-600"
+                  />
+                  <span>Client Professionnel (Société / B2B)</span>
+                </label>
+              </div>
+
+              {editClientData.isCompany && (
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Raison Sociale *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editClientData.companyName}
+                    onChange={(e) =>
+                      setEditClientData({ ...editClientData, companyName: e.target.value })
+                    }
+                    className="w-full p-2.5 border border-slate-300 rounded-xl"
+                  />
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Prénom</label>
+                  <input
+                    type="text"
+                    value={editClientData.firstName}
+                    onChange={(e) =>
+                      setEditClientData({ ...editClientData, firstName: e.target.value })
+                    }
+                    className="w-full p-2.5 border border-slate-300 rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Nom *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editClientData.lastName}
+                    onChange={(e) =>
+                      setEditClientData({ ...editClientData, lastName: e.target.value })
+                    }
+                    className="w-full p-2.5 border border-slate-300 rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Email *</label>
+                  <input
+                    type="email"
+                    required
+                    value={editClientData.email}
+                    onChange={(e) =>
+                      setEditClientData({ ...editClientData, email: e.target.value })
+                    }
+                    className="w-full p-2.5 border border-slate-300 rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Téléphone</label>
+                  <input
+                    type="text"
+                    value={editClientData.phone}
+                    onChange={(e) =>
+                      setEditClientData({ ...editClientData, phone: e.target.value })
+                    }
+                    className="w-full p-2.5 border border-slate-300 rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Adresse</label>
+                <input
+                  type="text"
+                  value={editClientData.address}
+                  onChange={(e) =>
+                    setEditClientData({ ...editClientData, address: e.target.value })
+                  }
+                  className="w-full p-2.5 border border-slate-300 rounded-xl"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Code Postal</label>
+                  <input
+                    type="text"
+                    value={editClientData.postalCode}
+                    onChange={(e) =>
+                      setEditClientData({ ...editClientData, postalCode: e.target.value })
+                    }
+                    className="w-full p-2.5 border border-slate-300 rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Ville</label>
+                  <input
+                    type="text"
+                    value={editClientData.city}
+                    onChange={(e) =>
+                      setEditClientData({ ...editClientData, city: e.target.value })
+                    }
+                    className="w-full p-2.5 border border-slate-300 rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Pays</label>
+                  <input
+                    type="text"
+                    value={editClientData.country}
+                    onChange={(e) =>
+                      setEditClientData({ ...editClientData, country: e.target.value })
+                    }
+                    className="w-full p-2.5 border border-slate-300 rounded-xl"
+                  />
+                </div>
+              </div>
+
+              {editClientData.isCompany && (
+                <div className="grid grid-cols-3 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">SIREN</label>
+                    <input
+                      type="text"
+                      value={editClientData.siren}
+                      onChange={(e) =>
+                        setEditClientData({ ...editClientData, siren: e.target.value })
+                      }
+                      className="w-full p-2 border border-slate-300 rounded-lg font-mono text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">SIRET</label>
+                    <input
+                      type="text"
+                      value={editClientData.siret}
+                      onChange={(e) =>
+                        setEditClientData({ ...editClientData, siret: e.target.value })
+                      }
+                      className="w-full p-2 border border-slate-300 rounded-lg font-mono text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">N° TVA Intra</label>
+                    <input
+                      type="text"
+                      value={editClientData.vatNumber}
+                      onChange={(e) =>
+                        setEditClientData({ ...editClientData, vatNumber: e.target.value })
+                      }
+                      className="w-full p-2 border border-slate-300 rounded-lg font-mono text-xs"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Notes / Instructions</label>
+                <textarea
+                  rows={2}
+                  value={editClientData.notes}
+                  onChange={(e) =>
+                    setEditClientData({ ...editClientData, notes: e.target.value })
+                  }
+                  className="w-full p-2.5 border border-slate-300 rounded-xl"
+                />
+              </div>
+
+              <div className="flex items-center justify-end space-x-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowEditClientModal(false)}
+                  className="px-4 py-2 rounded-xl text-slate-600 font-semibold"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={editClientSubmitting}
+                  className="px-5 py-2.5 rounded-xl bg-slate-900 text-white font-bold disabled:opacity-50"
+                >
+                  {editClientSubmitting ? "Enregistrement..." : "Enregistrer les modifications"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

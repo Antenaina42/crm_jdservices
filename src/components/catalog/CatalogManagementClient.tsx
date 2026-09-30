@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Plus, Edit2, Check, X, Layers, Car, Server } from "lucide-react";
+import { Plus, Edit2, Check, X, Layers, Car, Server, Trash2, Power } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 
 interface CatalogManagementClientProps {
@@ -18,9 +18,8 @@ export default function CatalogManagementClient({
   workspaceSlug,
 }: CatalogManagementClientProps) {
   const [items, setItems] = useState(initialItems);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editPrice, setEditPrice] = useState<number>(0);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingItem, setEditingItem] = useState<any | null>(null);
 
   // New item state
   const [code, setCode] = useState("");
@@ -32,28 +31,6 @@ export default function CatalogManagementClient({
   const [frequency, setFrequency] = useState("PONCTUELLE");
 
   const isAuto = workspaceSlug === "automobile";
-
-  const handleStartEdit = (item: any) => {
-    setEditingId(item.id);
-    setEditPrice(item.defaultPriceHt);
-  };
-
-  const handleSavePrice = async (id: string) => {
-    try {
-      const res = await fetch("/api/catalog", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, defaultPriceHt: editPrice }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Erreur");
-
-      setItems(items.map((it) => (it.id === id ? { ...it, defaultPriceHt: editPrice } : it)));
-      setEditingId(null);
-    } catch (err: any) {
-      alert(err.message);
-    }
-  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,27 +50,85 @@ export default function CatalogManagementClient({
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Erreur");
+      if (!res.ok) throw new Error(data.error || "Erreur création");
 
       setItems([...items, data.item]);
       setShowAddModal(false);
       setCode("");
       setName("");
       setDescription("");
+      setPriceHt(100);
     } catch (err: any) {
       alert(err.message);
     }
   };
 
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingItem) return;
+    try {
+      const res = await fetch("/api/catalog", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editingItem.id,
+          name: editingItem.name,
+          description: editingItem.description,
+          defaultPriceHt: editingItem.defaultPriceHt,
+          isActive: editingItem.isActive,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erreur mise à jour");
+
+      setItems(items.map((it) => (it.id === editingItem.id ? { ...it, ...editingItem } : it)));
+      setEditingItem(null);
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleDelete = async (id: string, itemName: string) => {
+    if (!confirm(`Confirmez-vous la suppression de la prestation "${itemName}" du catalogue ?`)) return;
+    try {
+      const res = await fetch(`/api/catalog?id=${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erreur");
+
+      setItems(items.filter((it) => it.id !== id));
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleToggleActive = async (item: any) => {
+    try {
+      const newStatus = !item.isActive;
+      const res = await fetch("/api/catalog", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: item.id, isActive: newStatus }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erreur");
+
+      setItems(items.map((it) => (it.id === item.id ? { ...it, isActive: newStatus } : it)));
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const categories = Array.from(new Set(items.map((it) => it.category)));
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">
             Catalogue de Prestations — {isAuto ? "Import Automobile" : "Réseau & Contrats"}
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Les tarifs sont entièrement configurables et peuvent être modifiés à tout moment sans altérer l&apos;historique comptable des anciennes factures.
+            Les tarifs sont entièrement configurables (CRUD complet) et modifiables sans altérer l&apos;historique comptable des anciennes factures.
           </p>
         </div>
 
@@ -109,185 +144,302 @@ export default function CatalogManagementClient({
         </button>
       </div>
 
-      {/* Services Table */}
-      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-2xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="bg-slate-50/70 border-b border-slate-200 text-slate-500 font-bold uppercase text-left">
-                <th className="py-3 px-4">Code</th>
-                <th className="py-3 px-4">Catégorie</th>
-                <th className="py-3 px-4">Prestation &amp; Description</th>
-                <th className="py-3 px-4 text-center">Unité</th>
-                <th className="py-3 px-4 text-right">Prix HT Configurable</th>
-                <th className="py-3 px-4 text-center">TVA</th>
-                <th className="py-3 px-4 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {items.map((item) => (
-                <tr key={item.id} className="hover:bg-slate-50/80 transition">
-                  <td className="py-3.5 px-4 font-mono font-bold text-slate-700">
-                    {item.code}
-                  </td>
-                  <td className="py-3.5 px-4">
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">
-                      {item.category}
-                    </span>
-                  </td>
-                  <td className="py-3.5 px-4">
-                    <div className="font-bold text-slate-900">{item.name}</div>
-                    {item.description && (
-                      <div className="text-[11px] text-slate-500 mt-0.5 max-w-md">
-                        {item.description}
+      {/* Categories & Catalog Grid */}
+      <div className="space-y-8">
+        {categories.map((cat) => {
+          const catItems = items.filter((it) => it.category === cat);
+          return (
+            <div key={cat} className="space-y-3">
+              <div className="flex items-center space-x-2">
+                <span className="text-xs font-black uppercase tracking-wider text-slate-500 bg-slate-200/70 px-2.5 py-0.5 rounded-md">
+                  {cat}
+                </span>
+                <span className="text-xs text-slate-400 font-semibold">({catItems.length} prestation{catItems.length > 1 ? "s" : ""})</span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {catItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className={`bg-white rounded-3xl p-5 border transition flex flex-col justify-between ${
+                      item.isActive
+                        ? "border-slate-200/80 shadow-2xs hover:shadow-xs"
+                        : "border-slate-200 bg-slate-50/50 opacity-60"
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <span className="font-mono text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                            {item.code}
+                          </span>
+                          <h3 className="font-bold text-slate-900 text-sm mt-1.5 leading-snug">
+                            {item.name}
+                          </h3>
+                        </div>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            item.isActive
+                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                              : "bg-slate-100 text-slate-500"
+                          }`}
+                        >
+                          {item.isActive ? "Actif" : "Inactif"}
+                        </span>
                       </div>
-                    )}
-                  </td>
-                  <td className="py-3.5 px-4 text-center text-slate-600">{item.unit}</td>
-                  <td className="py-3.5 px-4 text-right">
-                    {editingId === item.id ? (
-                      <div className="flex items-center justify-end space-x-1">
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={editPrice}
-                          onChange={(e) => setEditPrice(Number(e.target.value))}
-                          className="w-24 p-1 border border-blue-500 rounded text-right font-black text-xs"
-                        />
+
+                      {item.description && (
+                        <p className="text-xs text-slate-500 mt-2 line-clamp-2 leading-relaxed">
+                          {item.description}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                      <div>
+                        <div className="text-[10px] text-slate-400 uppercase font-semibold">
+                          Prix HT ({item.unit})
+                        </div>
+                        <div className="text-lg font-black text-slate-900">
+                          {formatCurrency(item.defaultPriceHt)}
+                        </div>
+                      </div>
+
+                      {/* Actions CRUD */}
+                      <div className="flex items-center space-x-1">
                         <button
                           type="button"
-                          onClick={() => handleSavePrice(item.id)}
-                          className="p-1 bg-emerald-600 text-white rounded hover:bg-emerald-700"
+                          onClick={() => handleToggleActive(item)}
+                          className={`p-1.5 rounded-lg text-xs transition ${
+                            item.isActive
+                              ? "text-emerald-700 hover:bg-emerald-50"
+                              : "text-slate-400 hover:bg-slate-200"
+                          }`}
+                          title={item.isActive ? "Désactiver la prestation" : "Activer la prestation"}
                         >
-                          <Check className="w-3.5 h-3.5" />
+                          <Power className="w-3.5 h-3.5" />
                         </button>
                         <button
                           type="button"
-                          onClick={() => setEditingId(null)}
-                          className="p-1 bg-slate-200 text-slate-600 rounded hover:bg-slate-300"
+                          onClick={() => setEditingItem(item)}
+                          className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition"
+                          title="Modifier la prestation"
                         >
-                          <X className="w-3.5 h-3.5" />
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(item.id, item.name)}
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                          title="Supprimer du catalogue"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
-                    ) : (
-                      <span className="font-black text-slate-900 text-sm">
-                        {formatCurrency(item.defaultPriceHt)}
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-3.5 px-4 text-center text-slate-600">{item.defaultTaxRate}%</td>
-                  <td className="py-3.5 px-4 text-right">
-                    {editingId !== item.id && (
-                      <button
-                        type="button"
-                        onClick={() => handleStartEdit(item)}
-                        className="inline-flex items-center px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold"
-                      >
-                        <Edit2 className="w-3 h-3 mr-1" />
-                        Modifier Prix
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
-      {/* CREATE MODAL */}
+      {/* MODAL AJOUT PRESTATION */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-slate-200">
-            <h3 className="text-lg font-black text-slate-900 mb-2">
-              Ajouter une Prestation au Catalogue
-            </h3>
-            <form onSubmit={handleCreate} className="space-y-4 text-xs">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-xl">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="font-black text-slate-900 text-base">Ajouter une Prestation</h3>
+              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreate} className="space-y-3 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Code Service *</label>
+                  <label className="block font-bold text-slate-700 mb-1">Code référence</label>
                   <input
                     type="text"
                     required
+                    placeholder="ex: CHK-01 ou M1-ESS"
                     value={code}
                     onChange={(e) => setCode(e.target.value)}
-                    placeholder={isAuto ? "AUTO-CHK-02" : "NET-M4"}
-                    className="w-full p-2.5 border border-slate-300 rounded-xl"
+                    className="w-full p-2 rounded-xl border border-slate-200"
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Catégorie *</label>
+                  <label className="block font-bold text-slate-700 mb-1">Catégorie</label>
                   <input
                     type="text"
                     required
+                    placeholder="ex: INSPECTION, RAPATRIEMENT, M1..."
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
-                    placeholder="Ex : CHECK, AUDIT, M1..."
-                    className="w-full p-2.5 border border-slate-300 rounded-xl"
+                    className="w-full p-2 rounded-xl border border-slate-200"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Nom de la prestation *</label>
+                <label className="block font-bold text-slate-700 mb-1">Désignation du service</label>
                 <input
                   type="text"
                   required
+                  placeholder="ex: Diagnostic valise + vérification kilométrage"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Intitulé officiel sur les proformas..."
-                  className="w-full p-2.5 border border-slate-300 rounded-xl"
+                  className="w-full p-2 rounded-xl border border-slate-200"
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Description technique</label>
+                <label className="block font-bold text-slate-700 mb-1">Description détaillée (facultative)</label>
                 <textarea
                   rows={2}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Détails des prestations incluses..."
-                  className="w-full p-2.5 border border-slate-300 rounded-xl"
-                ></textarea>
+                  className="w-full p-2 rounded-xl border border-slate-200"
+                />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Unité</label>
-                  <input
-                    type="text"
-                    value={unit}
-                    onChange={(e) => setUnit(e.target.value)}
-                    placeholder="Forfait, Unité, Mois..."
-                    className="w-full p-2.5 border border-slate-300 rounded-xl"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Prix par défaut HT (€) *</label>
+                  <label className="block font-bold text-slate-700 mb-1">Prix HT (€)</label>
                   <input
                     type="number"
                     step="0.01"
                     required
                     value={priceHt}
                     onChange={(e) => setPriceHt(Number(e.target.value))}
-                    className="w-full p-2.5 border border-slate-300 rounded-xl font-bold"
+                    className="w-full p-2 rounded-xl border border-slate-200"
                   />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Unité</label>
+                  <select
+                    value={unit}
+                    onChange={(e) => setUnit(e.target.value)}
+                    className="w-full p-2 rounded-xl border border-slate-200 bg-white"
+                  >
+                    <option value="Forfait">Forfait</option>
+                    <option value="Unité">Unité</option>
+                    <option value="Jours">Jours</option>
+                    <option value="Heures">Heures</option>
+                    <option value="Mois">Mois</option>
+                    <option value="Km">Km</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Périodicité</label>
+                  <select
+                    value={frequency}
+                    onChange={(e) => setFrequency(e.target.value)}
+                    className="w-full p-2 rounded-xl border border-slate-200 bg-white"
+                  >
+                    <option value="PONCTUELLE">Ponctuelle</option>
+                    <option value="MENSUELLE">Mensuelle</option>
+                    <option value="ANNUELLE">Annuelle</option>
+                  </select>
                 </div>
               </div>
 
-              <div className="pt-4 flex items-center justify-end space-x-3">
+              <div className="flex justify-end space-x-2 pt-3">
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 rounded-xl text-slate-600 font-semibold"
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-bold"
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 rounded-xl bg-slate-900 text-white font-bold"
+                  className="px-4 py-2 rounded-xl bg-slate-900 text-white font-bold"
                 >
-                  Ajouter au catalogue
+                  Enregistrer
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL MODIFICATION PRESTATION */}
+      {editingItem && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-xl">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="font-black text-slate-900 text-base">Modifier : {editingItem.code}</h3>
+              <button onClick={() => setEditingItem(null)} className="text-slate-400 hover:text-slate-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdate} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Désignation du service</label>
+                <input
+                  type="text"
+                  required
+                  value={editingItem.name}
+                  onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })}
+                  className="w-full p-2 rounded-xl border border-slate-200"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Description</label>
+                <textarea
+                  rows={2}
+                  value={editingItem.description || ""}
+                  onChange={(e) => setEditingItem({ ...editingItem, description: e.target.value })}
+                  className="w-full p-2 rounded-xl border border-slate-200"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Prix HT (€)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={editingItem.defaultPriceHt}
+                    onChange={(e) =>
+                      setEditingItem({ ...editingItem, defaultPriceHt: Number(e.target.value) })
+                    }
+                    className="w-full p-2 rounded-xl border border-slate-200"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Statut</label>
+                  <select
+                    value={editingItem.isActive ? "true" : "false"}
+                    onChange={(e) =>
+                      setEditingItem({ ...editingItem, isActive: e.target.value === "true" })
+                    }
+                    className="w-full p-2 rounded-xl border border-slate-200 bg-white"
+                  >
+                    <option value="true">Actif</option>
+                    <option value="false">Inactif</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setEditingItem(null)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-bold"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-slate-900 text-white font-bold"
+                >
+                  Mettre à jour
                 </button>
               </div>
             </form>

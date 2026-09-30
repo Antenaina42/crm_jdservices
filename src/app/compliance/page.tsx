@@ -87,7 +87,7 @@ export default async function ComplianceDashboardPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#F5F7FA] py-10 px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto space-y-8">
+    <div className="min-h-screen bg-[#F5F7FA] py-10 px-4 sm:px-6 lg:px-12 w-full space-y-8">
       {/* Top Bar */}
       <div className="flex items-center justify-between">
         <Link

@@ -116,8 +116,13 @@ export default function NetworkProformaTemplate({
           <div className="text-xs text-slate-500 mt-0.5">
             Émis le : {formatDateFr(document.date)}
           </div>
+          {!isInvoice && (
+            <div className="inline-flex items-center px-2 py-0.5 mt-1 rounded bg-amber-50 border border-amber-300 text-amber-900 font-extrabold text-[11px]">
+              ⏳ Validité de l&apos;offre : 1 mois
+            </div>
+          )}
           {document.dueDate && (
-            <div className="text-xs font-semibold text-cyan-900">
+            <div className="text-xs font-semibold text-cyan-900 mt-0.5">
               Échéance : {formatDateFr(document.dueDate)}
             </div>
           )}

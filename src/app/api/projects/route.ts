@@ -137,3 +137,82 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message || "Erreur serveur" }, { status: 500 });
   }
 }
+
+export async function PUT(req: NextRequest) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
+
+  try {
+    const body = await req.json();
+    const { id, title, status, notes } = body;
+    if (!id) return NextResponse.json({ error: "ID du projet requis" }, { status: 400 });
+
+    const existing = await prisma.project.findUnique({ where: { id } });
+    if (!existing) return NextResponse.json({ error: "Projet introuvable" }, { status: 404 });
+
+    const updated = await prisma.project.update({
+      where: { id },
+      data: {
+        title: title !== undefined ? title : undefined,
+        status: status !== undefined ? status : undefined,
+        notes: notes !== undefined ? notes : undefined,
+      },
+    });
+
+    await logAudit({
+      workspaceId: existing.workspaceId,
+      userId: session.id,
+      userEmail: session.email,
+      userRole: session.role,
+      action: AuditAction.UPDATED,
+      entityType: "Project",
+      entityId: existing.id,
+      entityReference: `${existing.projectNumber} - ${existing.title}`,
+      oldValue: { status: existing.status, title: existing.title },
+      newValue: { status: updated.status, title: updated.title },
+    });
+
+    return NextResponse.json({ success: true, project: updated });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || "Erreur mise à jour" }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
+
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "ID requis" }, { status: 400 });
+
+  const project = await prisma.project.findUnique({
+    where: { id },
+    include: { documents: { select: { id: true, documentNumber: true } } },
+  });
+
+  if (!project) return NextResponse.json({ error: "Projet introuvable" }, { status: 404 });
+
+  if (project.documents.length > 0) {
+    return NextResponse.json(
+      { error: "Impossible de supprimer ce projet car des documents ou factures lui sont rattachés." },
+      { status: 400 }
+    );
+  }
+
+  await prisma.project.delete({ where: { id } });
+
+  await logAudit({
+    workspaceId: project.workspaceId,
+    userId: session.id,
+    userEmail: session.email,
+    userRole: session.role,
+    action: AuditAction.DELETED,
+    entityType: "Project",
+    entityId: project.id,
+    entityReference: `${project.projectNumber} - ${project.title}`,
+  });
+
+  return NextResponse.json({ success: true, message: "Projet supprimé" });
+}
+

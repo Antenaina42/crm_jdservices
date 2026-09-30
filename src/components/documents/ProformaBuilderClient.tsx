@@ -24,6 +24,7 @@ interface ProformaBuilderClientProps {
   catalogItems: any[];
   workspaceSlug: "automobile" | "network";
   preselectedClientId?: string;
+  existingDocument?: any;
 }
 
 export default function ProformaBuilderClient({
@@ -33,22 +34,50 @@ export default function ProformaBuilderClient({
   catalogItems,
   workspaceSlug,
   preselectedClientId,
+  existingDocument,
 }: ProformaBuilderClientProps) {
   const router = useRouter();
   const isAuto = workspaceSlug === "automobile";
 
-  const [clientId, setClientId] = useState(preselectedClientId || (clients[0]?.id || ""));
-  const [projectId, setProjectId] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
-  const [validityDays, setValidityDays] = useState(30);
-  const [paymentTerms, setPaymentTerms] = useState(workspace.defaultPaymentTerms || "Acompte 50% à la commande, solde à la livraison.");
-  const [notes, setNotes] = useState(isAuto ? "NB: Carburant aller/retour + péage en SUS" : "Intervention sur site et télémaintenance incluse.");
-  const [internalNotes, setInternalNotes] = useState(isAuto ? "La voiture sera tracté avec notre véhicule par remorque." : "Vérification préalable des accès réseau requise.");
-  const [advancePercentage, setAdvancePercentage] = useState(isAuto ? 50 : 30);
+  const [clientId, setClientId] = useState(
+    existingDocument?.clientId || preselectedClientId || clients[0]?.id || ""
+  );
+  const [projectId, setProjectId] = useState(existingDocument?.projectId || "");
+  const [date, setDate] = useState(
+    existingDocument?.date
+      ? new Date(existingDocument.date).toISOString().split("T")[0]
+      : new Date().toISOString().split("T")[0]
+  );
+  const [validityDays, setValidityDays] = useState(existingDocument?.validityDays || 30);
+  const [paymentTerms, setPaymentTerms] = useState(
+    existingDocument?.paymentTerms ||
+      workspace.defaultPaymentTerms ||
+      "Acompte 50% à la commande, solde à la livraison."
+  );
+  const [notes, setNotes] = useState(
+    existingDocument?.notes ||
+      (isAuto ? "NB: Carburant aller/retour + péage en SUS" : "Intervention sur site et télémaintenance incluse.")
+  );
+  const [internalNotes, setInternalNotes] = useState(
+    existingDocument?.internalNotes ||
+      (isAuto ? "La voiture sera tracté avec notre véhicule par remorque." : "Vérification préalable des accès réseau requise.")
+  );
+  const [advancePercentage, setAdvancePercentage] = useState(
+    existingDocument?.advancePercentage !== undefined ? existingDocument.advancePercentage : isAuto ? 50 : 30
+  );
 
-  // Lignes par défaut
+  // Lignes par défaut ou existantes
   const [lines, setLines] = useState<any[]>(
-    isAuto
+    existingDocument?.lines?.length
+      ? existingDocument.lines.map((l: any) => ({
+          designation: l.designation,
+          description: l.description,
+          quantity: l.quantity,
+          unit: l.unit,
+          unitPriceHt: l.unitPriceHt,
+          taxRate: l.taxRate,
+        }))
+      : isAuto
       ? [
           {
             designation: "Service de check véhicule sur place avec vérification suivi de valise de diagnostic et km et accompagnement pour les plaques WW.",
@@ -157,28 +186,49 @@ export default function ProformaBuilderClient({
     setError(null);
 
     try {
-      const res = await fetch("/api/documents", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          workspaceId: workspace.id,
-          clientId,
-          projectId: projectId || null,
-          documentType: "PROFORMA",
-          date,
-          validityDays,
-          paymentTerms,
-          notes,
-          internalNotes,
-          advancePercentage,
-          lines,
-        }),
-      });
+      if (existingDocument) {
+        const res = await fetch(`/api/documents/${existingDocument.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            date,
+            validityDays,
+            paymentTerms,
+            notes,
+            internalNotes,
+            advancePercentage,
+            lines,
+          }),
+        });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Erreur création");
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Erreur modification");
 
-      router.push(`/${workspaceSlug}/proformas/${data.document.id}`);
+        router.push(`/${workspaceSlug}/proformas/${existingDocument.id}`);
+      } else {
+        const res = await fetch("/api/documents", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            workspaceId: workspace.id,
+            clientId,
+            projectId: projectId || null,
+            documentType: "PROFORMA",
+            date,
+            validityDays,
+            paymentTerms,
+            notes,
+            internalNotes,
+            advancePercentage,
+            lines,
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Erreur création");
+
+        router.push(`/${workspaceSlug}/proformas/${data.document.id}`);
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -187,20 +237,24 @@ export default function ProformaBuilderClient({
   };
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
+    <div className="space-y-6 w-full">
       <div>
         <Link
-          href={`/${workspaceSlug}/proformas`}
+          href={`/${workspaceSlug}/proformas${existingDocument ? `/${existingDocument.id}` : ""}`}
           className="inline-flex items-center text-xs font-semibold text-slate-500 hover:text-slate-800 transition mb-2"
         >
           <ArrowLeft className="w-3.5 h-3.5 mr-1" />
-          Retour aux proformas
+          {existingDocument ? "Retour au document" : "Retour aux proformas"}
         </Link>
         <h1 className="text-2xl font-black text-slate-900 tracking-tight">
-          Créer une Proforma — {isAuto ? "Import Automobile" : "Accompagnement Réseau"}
+          {existingDocument
+            ? `Modifier la Proforma ${existingDocument.documentNumber}`
+            : `Créer une Proforma — ${isAuto ? "Import Automobile" : "Accompagnement Réseau"}`}
         </h1>
         <p className="text-xs text-slate-500 mt-1">
-          Générez un document commercial préalable conforme aux modèles officiels JD-Services.
+          {existingDocument
+            ? "Mise à jour des lignes, quantités, montants et conditions avant émission définitive."
+            : "Générez un document commercial préalable conforme aux modèles officiels JD-Services (validité 1 mois)."}
         </p>
       </div>
 

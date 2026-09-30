@@ -7,6 +7,7 @@ import { formatCurrency, formatDateFr, numberToWordsFr } from "@/lib/utils";
 interface AutomobileProformaTemplateProps {
   document: {
     documentNumber: string;
+    documentType?: string;
     date: Date | string;
     dueDate?: Date | string;
     notes?: string | null;
@@ -79,6 +80,20 @@ export default function AutomobileProformaTemplate({
     ? client.companyName
     : `${client.firstName} ${client.lastName}`.trim();
 
+  const isInvoice = document.documentType === "INVOICE";
+  const isCreditNote = document.documentType === "CREDIT_NOTE";
+  const docTitle = isCreditNote
+    ? "FACTURE D'AVOIR"
+    : isInvoice
+    ? "FACTURE"
+    : "FACTURE PROFORMA";
+
+  const docNumberLabel = isCreditNote
+    ? "AVOIR N° :"
+    : isInvoice
+    ? "FACTURE N° :"
+    : "FACTURE PROFORMA N° :";
+
   // Date formatée JJ / MM / AAAA comme dans la référence PDF
   const d = new Date(document.date);
   const formattedDate = `${String(d.getDate()).padStart(2, "0")} / ${String(d.getMonth() + 1).padStart(2, "0")} / ${d.getFullYear()}`;
@@ -101,18 +116,32 @@ export default function AutomobileProformaTemplate({
 
         <div className="text-right">
           <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 uppercase">
-            FACTURE PROFORMA
+            {docTitle}
           </h1>
           <div className="text-xs font-bold text-slate-800 tracking-wider mt-1">
-            FACTURE N° : {document.documentNumber}
+            {docNumberLabel} {document.documentNumber}
           </div>
+          {isInvoice && (
+            <div className="text-[10px] font-extrabold uppercase text-emerald-700 tracking-wider mt-0.5">
+              Document Comptable Définitivement Émis
+            </div>
+          )}
         </div>
       </div>
 
       {/* DATE & ACTORS INFO */}
       <div className="mb-6">
-        <div className="text-xs font-bold text-slate-900 mb-6">
-          DATE : {formattedDate}
+        <div className="flex flex-wrap items-center justify-between text-xs font-bold text-slate-900 mb-6 pb-2 border-b border-slate-100">
+          <div>DATE : {formattedDate}</div>
+          {!isInvoice && !isCreditNote ? (
+            <div className="inline-flex items-center px-3 py-1 rounded-md bg-amber-50 border border-amber-300 text-amber-900 font-extrabold text-xs shadow-2xs">
+              <span className="mr-1.5">⏳</span> Validité de l&apos;offre : 1 mois
+            </div>
+          ) : document.dueDate ? (
+            <div className="text-slate-800 text-xs font-bold">
+              ÉCHÉANCE DE RÈGLEMENT : {formatDateFr(document.dueDate)}
+            </div>
+          ) : null}
         </div>
 
         <div className="grid grid-cols-2 gap-8 text-xs leading-relaxed">
@@ -245,6 +274,17 @@ export default function AutomobileProformaTemplate({
           <div className="border border-slate-800 rounded-lg p-3 text-xs text-slate-800 max-w-sm min-h-[50px] bg-slate-50/30">
             {document.internalNotes}
           </div>
+        </div>
+      )}
+
+      {/* MENTIONS LÉGALES & VALIDITÉ (1 MOIS) */}
+      {!isInvoice && !isCreditNote ? (
+        <div className="mt-4 p-3 bg-amber-50/80 border border-amber-200 rounded-lg text-[10px] text-amber-950 leading-relaxed">
+          <strong>Durée de validité de l&apos;offre : 1 mois</strong> (30 jours) à compter de sa date d&apos;émission. Passé ce délai, les tarifs et disponibilités des prestations et véhicules pourront faire l&apos;objet d&apos;une réévaluation. Ce document constitue un devis / facture proforma préalable et ne constitue pas une facture comptable définitive avant acceptation.
+        </div>
+      ) : (
+        <div className="mt-4 p-3 bg-slate-50 border border-slate-200 rounded-lg text-[10px] text-slate-700 leading-relaxed">
+          <strong>Conditions de règlement &amp; pénalités légales :</strong> Règlement par virement bancaire sous 30 jours à réception. En cas de retard de paiement, application de plein droit de pénalités au taux légal majoré ainsi qu&apos;une indemnité forfaitaire pour frais de recouvrement de 40 € (Code de commerce art. L441-9 et D441-5). Pas d&apos;escompte pour paiement anticipé.
         </div>
       )}
 

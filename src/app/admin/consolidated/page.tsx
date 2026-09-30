@@ -62,7 +62,7 @@ export default async function SuperAdminConsolidatedPage() {
   const totalCollected = autoCollected + netCollected;
 
   return (
-    <div className="min-h-screen bg-[#F5F7FA] py-10 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-8">
+    <div className="min-h-screen bg-[#F5F7FA] py-10 px-4 sm:px-6 lg:px-12 w-full space-y-8">
       <div>
         <Link
           href="/workspace-select"

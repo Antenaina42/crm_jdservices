@@ -67,3 +67,20 @@ export async function PUT(req: NextRequest) {
 
   return NextResponse.json({ success: true, item: updated });
 }
+
+export async function DELETE(req: NextRequest) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
+
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "ID requis" }, { status: 400 });
+
+  const existing = await prisma.serviceCatalogItem.findUnique({ where: { id } });
+  if (!existing) return NextResponse.json({ error: "Prestation introuvable" }, { status: 404 });
+
+  await prisma.serviceCatalogItem.delete({ where: { id } });
+
+  return NextResponse.json({ success: true, message: "Prestation supprimée du catalogue" });
+}
+

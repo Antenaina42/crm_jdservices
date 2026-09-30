@@ -7,6 +7,7 @@ import {
   Mail,
   PenTool,
   FileCheck,
+  CreditCard,
   Maximize2,
   Minimize2,
   ZoomIn,
@@ -31,6 +32,7 @@ interface DocumentViewerProps {
   onSendEmail?: () => void;
   onRequestSignature?: () => void;
   onCreateInvoice?: () => void;
+  onRecordPayment?: () => void;
   onDuplicate?: () => void;
 }
 
@@ -45,6 +47,7 @@ export default function DocumentViewer({
   onSendEmail,
   onRequestSignature,
   onCreateInvoice,
+  onRecordPayment,
   onDuplicate,
 }: DocumentViewerProps) {
   const [zoom, setZoom] = useState(100);
@@ -191,6 +194,18 @@ export default function DocumentViewer({
             >
               <FileCheck className="w-4 h-4 mr-1.5" />
               <span>Créer la Facture</span>
+            </button>
+          )}
+
+          {onRecordPayment && document.documentType === "INVOICE" && document.status !== "PAID" && (
+            <button
+              type="button"
+              onClick={onRecordPayment}
+              className="inline-flex items-center px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition shadow-sm"
+              title="Enregistrer un règlement / Payer la facture"
+            >
+              <CreditCard className="w-4 h-4 mr-1.5" />
+              <span>Payer</span>
             </button>
           )}
 

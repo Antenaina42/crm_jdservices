@@ -63,7 +63,7 @@ export default async function SettingsIndexPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#F5F7FA] py-10 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto space-y-6">
+    <div className="min-h-screen bg-[#F5F7FA] py-10 px-4 sm:px-6 lg:px-12 w-full space-y-6">
       <div>
         <Link
           href="/workspace-select"

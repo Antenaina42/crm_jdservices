@@ -15,9 +15,15 @@ import {
   ExternalLink,
   CheckCircle2,
   Lock,
+  CreditCard,
+  Edit2,
+  Trash2,
+  X,
+  DollarSign,
+  AlertTriangle,
 } from "lucide-react";
 import DocumentViewer from "./DocumentViewer";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatDateFr } from "@/lib/utils";
 
 interface DocumentDetailViewClientProps {
   workspace: any;
@@ -37,6 +43,15 @@ export default function DocumentDetailViewClient({
   const [actionLoading, setActionLoading] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string; details?: any } | null>(null);
   const [signatureLinkModal, setSignatureLinkModal] = useState<string | null>(null);
+
+  // Payment modal state
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState<number>(doc.balanceDue || doc.totalTtc || 0);
+  const [paymentMethod, setPaymentMethod] = useState("TRANSFER");
+  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split("T")[0]);
+  const [paymentReference, setPaymentReference] = useState("");
+  const [paymentNotes, setPaymentNotes] = useState("");
+  const [paymentSubmitting, setPaymentSubmitting] = useState(false);
 
   const isAuto = workspaceSlug === "automobile";
   const isProforma = doc.documentType === "PROFORMA";
@@ -149,8 +164,61 @@ export default function DocumentDetailViewClient({
     }
   };
 
+  const handleDeleteDocument = async () => {
+    if (!confirm(`Confirmez-vous la suppression du document ${doc.documentNumber} ?`)) return;
+    setActionLoading(true);
+    try {
+      const res = await fetch(`/api/documents/${doc.id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erreur suppression");
+      alert("Document supprimé.");
+      router.push(`/${workspaceSlug}/${isProforma ? "proformas" : "invoices"}`);
+    } catch (err: any) {
+      alert(err.message);
+      setActionLoading(false);
+    }
+  };
+
+  const handleRecordPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!paymentAmount || paymentAmount <= 0) {
+      alert("Veuillez indiquer un montant supérieur à 0.");
+      return;
+    }
+    setPaymentSubmitting(true);
+    try {
+      const res = await fetch("/api/payments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: workspace.id,
+          documentId: doc.id,
+          amount: paymentAmount,
+          paymentMethod,
+          paymentDate,
+          reference: paymentReference,
+          notes: paymentNotes,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erreur enregistrement règlement");
+
+      setDoc(data.updatedDoc);
+      setShowPaymentModal(false);
+      setFeedback({
+        type: "success",
+        message: `Règlement de ${formatCurrency(paymentAmount)} enregistré avec succès ! Facture mise à jour.`,
+      });
+      router.refresh();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setPaymentSubmitting(false);
+    }
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full">
       {/* Back button & Action summary */}
       <div className="no-print flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -171,11 +239,64 @@ export default function DocumentDetailViewClient({
                 Scellé / Immuable
               </span>
             )}
+            <span
+              className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                doc.status === "PAID"
+                  ? "bg-teal-50 text-teal-800 border border-teal-200"
+                  : doc.status === "ACCEPTED" || doc.status === "SIGNED"
+                  ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                  : doc.status === "SENT"
+                  ? "bg-blue-50 text-blue-700 border border-blue-200"
+                  : "bg-slate-100 text-slate-700"
+              }`}
+            >
+              {doc.status}
+            </span>
           </div>
         </div>
 
         {/* Action Header Buttons */}
         <div className="flex flex-wrap items-center gap-2">
+          {/* BOUTON PAYER POUR FACTURES */}
+          {isInvoice && doc.status !== "PAID" && (
+            <button
+              type="button"
+              onClick={() => {
+                setPaymentAmount(doc.balanceDue || doc.totalTtc);
+                setShowPaymentModal(true);
+              }}
+              className="inline-flex items-center px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow-md transition"
+            >
+              <CreditCard className="w-4 h-4 mr-1.5" />
+              Payer la Facture
+            </button>
+          )}
+
+          {/* BOUTON CRÉER LA FACTURE DEPUIS PROFORMA */}
+          {isProforma && (
+            <button
+              type="button"
+              disabled={actionLoading}
+              onClick={handleConvertToInvoice}
+              className="inline-flex items-center px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs shadow-md transition disabled:opacity-50"
+            >
+              <FileCheck className="w-4 h-4 mr-1.5" />
+              Convertir en Facture Légale
+            </button>
+          )}
+
+          {/* MODIFIER BROUILLON */}
+          {!doc.isImmutable && (
+            <Link
+              href={`/${workspaceSlug}/${isProforma ? "proformas" : "invoices"}/${doc.id}/edit`}
+              className="inline-flex items-center px-3.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs transition"
+            >
+              <Edit2 className="w-3.5 h-3.5 mr-1.5" />
+              Modifier
+            </Link>
+          )}
+
+          {/* ÉMETTRE & SCELLER */}
           {!doc.isImmutable && (
             <button
               type="button"
@@ -188,6 +309,7 @@ export default function DocumentDetailViewClient({
             </button>
           )}
 
+          {/* AVOIR SI FACTURE ERRONÉE */}
           {isInvoice && doc.status !== "CANCELLED" && doc.status !== "CREDITED" && (
             <button
               type="button"
@@ -198,8 +320,62 @@ export default function DocumentDetailViewClient({
               Créer un Avoir
             </button>
           )}
+
+          {/* SUPPRIMER SI BROUILLON */}
+          {!doc.isImmutable && (
+            <button
+              type="button"
+              disabled={actionLoading}
+              onClick={handleDeleteDocument}
+              className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition"
+              title="Supprimer ce document brouillon"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
+
+      {/* RESTE À PAYER BANNER FOR INVOICES */}
+      {isInvoice && (
+        <div className="no-print bg-white p-4 sm:p-5 rounded-3xl border border-slate-200/80 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center space-x-4">
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white ${
+              doc.status === "PAID" ? "bg-teal-600" : "bg-amber-600"
+            }`}>
+              <CreditCard className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="text-xs text-slate-500 font-semibold uppercase tracking-wider">
+                État des Règlements
+              </div>
+              <div className="text-lg font-black text-slate-900">
+                {doc.status === "PAID" ? (
+                  <span className="text-teal-700">Facture 100% Réglée ({formatCurrency(doc.totalTtc)})</span>
+                ) : (
+                  <span>
+                    Reste à régler : <strong className="text-amber-700">{formatCurrency(doc.balanceDue)}</strong> sur {formatCurrency(doc.totalTtc)}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {doc.status !== "PAID" && (
+            <button
+              type="button"
+              onClick={() => {
+                setPaymentAmount(doc.balanceDue);
+                setShowPaymentModal(true);
+              }}
+              className="w-full sm:w-auto inline-flex items-center justify-center px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition"
+            >
+              <DollarSign className="w-4 h-4 mr-1.5" />
+              Enregistrer un Règlement
+            </button>
+          )}
+        </div>
+      )}
 
       {/* FEEDBACK BANNER */}
       {feedback && (
@@ -281,7 +457,124 @@ export default function DocumentDetailViewClient({
         onSendEmail={handleSendEmail}
         onRequestSignature={handleRequestSignature}
         onCreateInvoice={isProforma ? handleConvertToInvoice : undefined}
+        onRecordPayment={isInvoice && doc.status !== "PAID" ? () => setShowPaymentModal(true) : undefined}
       />
+
+      {/* MODAL ENREGISTRER PAIEMENT */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-xl">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center space-x-2">
+                <CreditCard className="w-5 h-5 text-emerald-600" />
+                <h3 className="font-black text-slate-900 text-base">Enregistrer un Règlement</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPaymentModal(false)}
+                className="text-slate-400 hover:text-slate-700"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3 bg-slate-50 rounded-2xl text-xs space-y-1">
+              <div className="flex justify-between text-slate-600">
+                <span>Facture :</span>
+                <strong className="text-slate-900">{doc.documentNumber}</strong>
+              </div>
+              <div className="flex justify-between text-slate-600">
+                <span>Total Facture TTC :</span>
+                <span className="font-mono">{formatCurrency(doc.totalTtc)}</span>
+              </div>
+              <div className="flex justify-between text-slate-600">
+                <span>Reste à payer :</span>
+                <strong className="text-amber-700 font-mono">{formatCurrency(doc.balanceDue)}</strong>
+              </div>
+            </div>
+
+            <form onSubmit={handleRecordPayment} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Montant réglé (€)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  required
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(Number(e.target.value))}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 font-mono font-bold text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Mode de règlement</label>
+                <select
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 bg-white"
+                >
+                  <option value="TRANSFER">Virement Bancaire (SEPA)</option>
+                  <option value="CARD">Carte Bancaire (CB / Stripe)</option>
+                  <option value="CHECK">Chèque Bancaire</option>
+                  <option value="CASH">Espèces</option>
+                  <option value="OTHER">Autre mode</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Date du paiement</label>
+                  <input
+                    type="date"
+                    required
+                    value={paymentDate}
+                    onChange={(e) => setPaymentDate(e.target.value)}
+                    className="w-full p-2 rounded-xl border border-slate-200"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Référence transaction</label>
+                  <input
+                    type="text"
+                    placeholder="ex: VIR-98214"
+                    value={paymentReference}
+                    onChange={(e) => setPaymentReference(e.target.value)}
+                    className="w-full p-2 rounded-xl border border-slate-200"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Notes / Commentaire</label>
+                <textarea
+                  rows={2}
+                  placeholder="Remarques comptables..."
+                  value={paymentNotes}
+                  onChange={(e) => setPaymentNotes(e.target.value)}
+                  className="w-full p-2 rounded-xl border border-slate-200"
+                />
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowPaymentModal(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-bold"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={paymentSubmitting}
+                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm disabled:opacity-50"
+                >
+                  {paymentSubmitting ? "Validation..." : "Valider le Règlement"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

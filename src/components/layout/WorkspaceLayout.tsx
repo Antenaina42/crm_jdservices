@@ -289,8 +289,8 @@ export default function WorkspaceLayout({ workspace, user, children }: Workspace
           </div>
         </header>
 
-        {/* Content Body */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">{children}</main>
+        {/* Content Body - Full Width */}
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 w-full">{children}</main>
       </div>
     </div>
   );

@@ -2,13 +2,12 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
-import { ShieldCheck, Lock, Mail, ArrowRight, Car, Server, UserCheck, AlertCircle } from "lucide-react";
+import { ShieldCheck, Lock, Mail, ArrowRight, AlertCircle } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState("admin@jd-services.fr");
+  const [password, setPassword] = useState("Password123!");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,8 +38,8 @@ export default function LoginPage() {
     }
   };
 
-  const handleQuickLogin = (demoEmail: string) => {
-    setEmail(demoEmail);
+  const handleFillSuperAdmin = () => {
+    setEmail("admin@jd-services.fr");
     setPassword("Password123!");
     setError(null);
   };
@@ -69,6 +68,26 @@ export default function LoginPage() {
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md px-4 sm:px-0">
         <div className="bg-white py-8 px-6 shadow-sm border border-slate-200/80 rounded-2xl sm:px-10">
+          {/* Badge Super Admin */}
+          <div className="mb-6 p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between text-xs">
+            <div className="flex items-center space-x-2.5">
+              <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                <ShieldCheck className="w-4 h-4 text-amber-400" />
+              </div>
+              <div>
+                <div className="font-bold text-slate-900">Accès Super Admin</div>
+                <div className="text-[11px] text-slate-500">Jean-Désiré Martialino (Tous les espaces)</div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleFillSuperAdmin}
+              className="text-[11px] font-bold text-blue-600 hover:text-blue-700 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-2xs hover:bg-slate-50 transition"
+            >
+              Pré-remplir
+            </button>
+          </div>
+
           {error && (
             <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 flex items-start text-red-700 text-sm">
               <AlertCircle className="w-5 h-5 mr-2.5 flex-shrink-0 mt-0.5 text-red-500" />
@@ -90,7 +109,7 @@ export default function LoginPage() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="nom@jd-services.fr"
+                  placeholder="admin@jd-services.fr"
                   className="block w-full pl-11 pr-4 py-2.5 text-sm rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition-colors bg-white text-slate-900"
                 />
               </div>
@@ -140,68 +159,12 @@ export default function LoginPage() {
                   </span>
                 ) : (
                   <span className="flex items-center">
-                    Se connecter <ArrowRight className="ml-2 w-4 h-4" />
+                    Se connecter en tant que Super Admin <ArrowRight className="ml-2 w-4 h-4" />
                   </span>
                 )}
               </button>
             </div>
           </form>
-
-          {/* Accès Démonstration Rapide */}
-          <div className="mt-8 pt-6 border-t border-slate-100">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 text-center mb-3">
-              Comptes Démo Préconfigurés (1-Clic)
-            </p>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <button
-                type="button"
-                onClick={() => handleQuickLogin("admin@jd-services.fr")}
-                className="flex items-center p-2 rounded-lg border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition text-slate-700 text-left"
-              >
-                <ShieldCheck className="w-4 h-4 text-amber-600 mr-2 flex-shrink-0" />
-                <div className="truncate">
-                  <div className="font-semibold truncate">Super Admin</div>
-                  <div className="text-[10px] text-slate-400 truncate">Jean-Désiré (Tous)</div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickLogin("commercial.auto@jd-services.fr")}
-                className="flex items-center p-2 rounded-lg border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition text-slate-700 text-left"
-              >
-                <Car className="w-4 h-4 text-blue-600 mr-2 flex-shrink-0" />
-                <div className="truncate">
-                  <div className="font-semibold truncate">Auto Commercial</div>
-                  <div className="text-[10px] text-slate-400 truncate">Marc Dubois</div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickLogin("tech.network@jd-services.fr")}
-                className="flex items-center p-2 rounded-lg border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition text-slate-700 text-left"
-              >
-                <Server className="w-4 h-4 text-cyan-600 mr-2 flex-shrink-0" />
-                <div className="truncate">
-                  <div className="font-semibold truncate">Tech Réseau</div>
-                  <div className="text-[10px] text-slate-400 truncate">Thomas Leroy</div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickLogin("comptable@jd-services.fr")}
-                className="flex items-center p-2 rounded-lg border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition text-slate-700 text-left"
-              >
-                <UserCheck className="w-4 h-4 text-emerald-600 mr-2 flex-shrink-0" />
-                <div className="truncate">
-                  <div className="font-semibold truncate">Comptable</div>
-                  <div className="text-[10px] text-slate-400 truncate">Sophie Bernard</div>
-                </div>
-              </button>
-            </div>
-          </div>
         </div>
 
         <div className="mt-8 text-center text-xs text-slate-400">

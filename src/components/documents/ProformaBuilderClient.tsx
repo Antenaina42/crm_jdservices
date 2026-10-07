@@ -509,7 +509,9 @@ export default function ProformaBuilderClient({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
             <div>
               <label className="block font-bold text-slate-700 mb-1">
-                Notes visibles sur le document (ex: Carburant + péage en SUS)
+                {isAuto
+                  ? "Notes visibles sur le document (ex: Carburant + péage en SUS)"
+                  : "Notes visibles sur le document"}
               </label>
               <textarea
                 rows={2}

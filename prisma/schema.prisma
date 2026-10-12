@@ -133,7 +133,7 @@ model Workspace {
   country             String        @default("France")
   phone               String        @default("06.25.98.67.23")
   email               String        @default("contact@jd-services.fr")
-  website             String?       @default("https://jd-services.m-itlevelup.com")
+  website             String?       @default("https://rasolonjatovo.fr")
   logoUrl             String?
   iban                String?
   bic                 String?

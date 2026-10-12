@@ -8,7 +8,7 @@
 
 1. **Isolation Stricte Multi-Workspaces (Zero Data Crossover)**
    - Deux environnements métier indépendants :
-     - 🚗 **JD-SERVICES IMPORT AUTOMOBILE** (Import, vente, rachat, démarches WW, transport). Identité visuelle fidèle au site web officiel (`https://jd-services.m-itlevelup.com`).
+     - 🚗 **JD-SERVICES IMPORT AUTOMOBILE** (Import, vente, rachat, démarches WW, transport). Identité visuelle fidèle au site officiel (`https://rasolonjatovo.fr`).
      - 🖥️ **JD-SERVICES ACCOMPAGNEMENT RÉSEAU** (Audit IT, infrastructures, pare-feu, Wi-Fi 6, VLAN, forfaits de maintenance M1 / M2 / M3). Identité visuelle B2B Tech / Infrastructure.
    - **Garantie serveur** : Chaque requête d'API, Server Action ou lecture base de données filtre impérativement par `workspaceId`. Les clients, prospects, projets, documents et paiements ne fuient jamais d'un espace à l'autre.
 

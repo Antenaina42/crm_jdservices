@@ -1,4 +1,4 @@
-name: Déploiement Sécurisé OVHcloud Perso (crm.m-itlevelup.com)
+name: Déploiement Sécurisé OVHcloud Perso (crm.rasolonjatovo.fr)
 
 on:
   push:
@@ -57,7 +57,7 @@ jobs:
               'DB_USER' => '${{ secrets.DB_USER }}',
               'DB_PASS' => '${{ secrets.DB_PASS }}',
               'AUTH_SECRET' => '${{ secrets.AUTH_SECRET }}',
-              'APP_URL' => 'https://crm.m-itlevelup.com',
+              'APP_URL' => 'https://crm.rasolonjatovo.fr',
               'APP_ENV' => 'production',
               'EMAIL_PROVIDER' => 'mail',
               'EMAIL_FROM' => 'contact@jd-services.fr',

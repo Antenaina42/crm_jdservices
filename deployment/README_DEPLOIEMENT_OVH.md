@@ -1,5 +1,5 @@
 # Guide de Déploiement OVHcloud Perso — JD-SERVICES MANAGEMENT
-**Sous-domaine cible :** `https://crm.m-itlevelup.com`  
+**Sous-domaine cible :** `https://crm.rasolonjatovo.fr`  
 **Dépôt GitHub :** `https://github.com/Antenaina42/crm_jdservices`  
 **Architecture :** Frontend Statique (HTML5/React) + API PHP 8.2 PDO + Base MySQL OVH
 
@@ -54,7 +54,7 @@ Le workflow `.github/workflows/deploy.yml` se déclenche automatiquement :
 1. Compilation du frontend statique en HTML/CSS/JS optimisé (`out/`).
 2. Assemblage du dossier `release/` avec le frontend et le backend PHP/PDO.
 3. Injection automatique des identifiants de production dans `config/.env.local.php`.
-4. Téléversement sécurisé via FTPS directement dans le sous-dossier dédié sans toucher aux autres sous-domaines (`https://jd-services.m-itlevelup.com`).
+4. Téléversement sécurisé via FTPS directement dans le sous-dossier dédié sans toucher aux autres sites hébergés sur `rasolonjatovo.fr`.
 
 ---
 
@@ -75,12 +75,12 @@ Si vous préférez téléverser manuellement sans GitHub Actions :
        'DB_USER' => 'votre_utilisateur_ovh',
        'DB_PASS' => 'votre_mot_de_passe_ovh',
        'AUTH_SECRET' => 'votre_cle_jwt_secrete_32_caracteres_minimum',
-       'APP_URL' => 'https://crm.m-itlevelup.com',
+       'APP_URL' => 'https://crm.rasolonjatovo.fr',
        'APP_ENV' => 'production',
    ];
    ```
 3. Ouvrez **FileZilla**, connectez-vous à votre hébergement OVH.
-4. Ouvrez le dossier cible lié au sous-domaine `crm.m-itlevelup.com` (ex: `/www/crm/` ou `/crm/`).
+4. Ouvrez le dossier cible lié au sous-domaine `crm.rasolonjatovo.fr` (ex: `/www/crm/` ou `/crm/`).
 5. Téléversez l'intégralité du contenu du dossier local `release/` dans ce dossier distant.
 
 ---
@@ -88,7 +88,7 @@ Si vous préférez téléverser manuellement sans GitHub Actions :
 ## 5. Vérification Finale en Ligne
 
 Une fois le déploiement terminé, rendez-vous sur :
-👉 **https://crm.m-itlevelup.com**
+👉 **https://crm.rasolonjatovo.fr**
 
 1. **Page de Connexion :** La mire de login s'affiche sans erreur Node.js.
 2. **Connexion Super Admin :** Saisissez `admin@jd-services.fr` / `Password123!`.

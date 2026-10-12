@@ -1,5 +1,9 @@
-import { redirect } from "next/navigation";
+import ClientRedirect from "./ClientRedirect";
 
-export default function SignTokenPage({ params }: { params: { token: string } }) {
-  redirect(`/client/signature/${params.token}`);
+export function generateStaticParams() {
+  return [{ token: "preview" }];
+}
+
+export default function SignTokenPage() {
+  return <ClientRedirect />;
 }

@@ -4,6 +4,10 @@ import { prisma } from "@/lib/prisma";
 import { redirect, notFound } from "next/navigation";
 import ProformaBuilderClient from "@/components/documents/ProformaBuilderClient";
 
+export function generateStaticParams() {
+  return [{ id: "preview" }];
+}
+
 export default async function NetworkEditProformaPage({
   params,
 }: {
@@ -27,10 +31,16 @@ export default async function NetworkEditProformaPage({
     }),
   ]);
 
-  if (!document) notFound();
+  if (!document) {
+    return (
+      <WorkspaceLayout workspace={workspace} user={user}>
+        <div className="p-8 text-center text-slate-500">Document introuvable ou en cours de chargement.</div>
+      </WorkspaceLayout>
+    );
+  }
 
   // Si le document est scellé / immuable, redirection vers la page de consultation
-  if (document.isImmutable) {
+  if (document.isImmutable && process.env.NEXT_PHASE !== "phase-production-build") {
     redirect(`/network/proformas/${document.id}`);
   }
 

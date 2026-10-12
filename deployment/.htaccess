@@ -1,0 +1,74 @@
+# ==============================================================================
+# JD-SERVICES MANAGEMENT — Configuration Apache OVHcloud Perso
+# Sous-domaine : https://crm.m-itlevelup.com
+# ==============================================================================
+
+# Désactiver le listage des répertoires
+Options -Indexes
+
+# ------------------------------------------------------------------------------
+# 1. En-têtes de Sécurité HTTP
+# ------------------------------------------------------------------------------
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set X-XSS-Protection "1; mode=block"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# ------------------------------------------------------------------------------
+# 2. Protection des fichiers et dossiers confidentiels
+# ------------------------------------------------------------------------------
+# Interdire l'accès aux fichiers sensibles (.env, .git, .sql, etc.)
+<FilesMatch "(^\.env.*|^\.git.*|\.sql|\.json|\.lock|\.example)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# ------------------------------------------------------------------------------
+# 3. Moteur de réécriture d'URL (mod_rewrite)
+# ------------------------------------------------------------------------------
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+
+    # Bloquer l'accès direct aux dossiers PHP internes sensibles
+    RewriteRule ^(config|src|tests|scripts)(/|$) - [F,L]
+
+    # Routage des appels API vers le Front Controller PHP
+    RewriteRule ^api/(.*)$ api/index.php [QSA,L]
+    RewriteRule ^api$ api/index.php [QSA,L]
+
+    # Si le fichier ou le dossier physique demandé existe, le servir directement
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # Si l'URL correspond à un fichier .html existant, l'afficher
+    RewriteCond %{DOCUMENT_ROOT}/$1.html -f
+    RewriteRule ^(.*)$ $1.html [L]
+
+    RewriteCond %{REQUEST_FILENAME}.html -f
+    RewriteRule ^(.*)$ $1.html [L]
+
+    # Routage des segments dynamiques vers les coquilles SPA correspondantes
+    RewriteRule ^automobile/clients/([^/]+)$ automobile/clients/preview.html [L]
+    RewriteRule ^automobile/invoices/([^/]+)$ automobile/invoices/1.html [L]
+    RewriteRule ^automobile/proformas/([^/]+)/edit$ automobile/proformas/preview/edit.html [L]
+    RewriteRule ^automobile/proformas/([^/]+)$ automobile/proformas/preview.html [L]
+
+    RewriteRule ^network/clients/([^/]+)$ network/clients/preview.html [L]
+    RewriteRule ^network/invoices/([^/]+)$ network/invoices/preview.html [L]
+    RewriteRule ^network/proformas/([^/]+)/edit$ network/proformas/preview/edit.html [L]
+    RewriteRule ^network/proformas/([^/]+)$ network/proformas/preview.html [L]
+
+    RewriteRule ^client/signature/([^/]+)$ client/signature/preview.html [L]
+    RewriteRule ^sign/([^/]+)$ sign/preview.html [L]
+</IfModule>
+
+# ------------------------------------------------------------------------------
+# 4. Pages d'erreur personnalisées
+# ------------------------------------------------------------------------------
+ErrorDocument 404 /404.html
+ErrorDocument 403 /404.html
+ErrorDocument 500 /404.html

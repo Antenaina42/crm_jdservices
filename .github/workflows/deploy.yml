@@ -1,0 +1,81 @@
+name: Déploiement Sécurisé OVHcloud Perso (crm.m-itlevelup.com)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ovh-deploy
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    name: Build Frontend & Déploiement FTPS
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 1. Cloner le dépôt
+        uses: actions/checkout@v4
+
+      - name: 2. Configurer Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: 3. Installer les dépendances
+        run: npm ci
+
+      - name: 4. Compiler le frontend statique (Next.js export)
+        run: npm run build
+        env:
+          NEXT_PHASE: phase-production-build
+          IS_EXPORT: "true"
+          AUTH_SECRET: ${{ secrets.AUTH_SECRET || 'build-secret-key-placeholder-32-chars-long' }}
+
+      - name: 5. Préparer l'archive de livraison pour OVH
+        run: |
+          mkdir -p release
+          # Copier le frontend statique
+          cp -r out/* release/
+          
+          # Copier l'API PHP et le cœur métier
+          mkdir -p release/api release/src release/config
+          cp -r php-backend/api/* release/api/
+          cp -r php-backend/src/* release/src/
+          cp -r php-backend/config/config.php release/config/
+          
+          # Générer le fichier de configuration de production avec les secrets
+          cat <<EOF > release/config/.env.local.php
+          <?php
+          return [
+              'DB_HOST' => '${{ secrets.DB_HOST }}',
+              'DB_PORT' => 3306,
+              'DB_NAME' => '${{ secrets.DB_NAME }}',
+              'DB_USER' => '${{ secrets.DB_USER }}',
+              'DB_PASS' => '${{ secrets.DB_PASS }}',
+              'AUTH_SECRET' => '${{ secrets.AUTH_SECRET }}',
+              'APP_URL' => 'https://crm.m-itlevelup.com',
+              'APP_ENV' => 'production',
+              'EMAIL_PROVIDER' => 'mail',
+              'EMAIL_FROM' => 'contact@jd-services.fr',
+              'EMAIL_FROM_NAME' => 'JD-SERVICES MANAGEMENT',
+          ];
+          EOF
+
+          # Copier les configurations Apache et OVH
+          cp deployment/.htaccess release/.htaccess
+          cp deployment/.ovhconfig release/.ovhconfig
+
+      - name: 6. Déployer sur le répertoire OVH via FTPS sécurisé
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.OVH_FTP_SERVER }}
+          username: ${{ secrets.OVH_FTP_USERNAME }}
+          password: ${{ secrets.OVH_FTP_PASSWORD }}
+          server-dir: ${{ secrets.OVH_REMOTE_DIR }}
+          local-dir: ./release/
+          protocol: ftps
+          dangerous-clean-slate: false

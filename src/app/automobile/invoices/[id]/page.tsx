@@ -4,6 +4,10 @@ import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import DocumentDetailViewClient from "@/components/documents/DocumentDetailViewClient";
 
+export function generateStaticParams() {
+  return [{ id: "1" }];
+}
+
 export default async function AutomobileInvoiceDetailPage({ params }: { params: { id: string } }) {
   const { workspace, user } = await requireWorkspace("automobile");
 
@@ -24,7 +28,11 @@ export default async function AutomobileInvoiceDetailPage({ params }: { params: 
   });
 
   if (!doc) {
-    notFound();
+    return (
+      <WorkspaceLayout workspace={workspace} user={user}>
+        <div className="p-8 text-center text-slate-500">Document introuvable ou en cours de chargement.</div>
+      </WorkspaceLayout>
+    );
   }
 
   return (

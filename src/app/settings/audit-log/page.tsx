@@ -5,25 +5,11 @@ import { prisma } from "@/lib/prisma";
 import { ArrowLeft, Shield, FileText, Search, User, Clock, Terminal } from "lucide-react";
 import { formatDateTimeFr } from "@/lib/utils";
 
-export default async function AuditLogPage({
-  searchParams,
-}: {
-  searchParams: { action?: string; q?: string };
-}) {
+export default async function AuditLogPage() {
   const session = await getSession();
   if (!session) redirect("/login");
 
   const whereClause: any = {};
-  if (searchParams.action) {
-    whereClause.action = searchParams.action;
-  }
-  if (searchParams.q) {
-    whereClause.OR = [
-      { userEmail: { contains: searchParams.q } },
-      { entityReference: { contains: searchParams.q } },
-      { entityType: { contains: searchParams.q } },
-    ];
-  }
 
   const logs = await prisma.auditLog.findMany({
     where: whereClause,

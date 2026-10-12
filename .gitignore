@@ -26,6 +26,8 @@ yarn-error.log*
 # local env files
 .env*.local
 .env
+php-backend/config/.env.local.php
+release/
 
 # vercel
 .vercel

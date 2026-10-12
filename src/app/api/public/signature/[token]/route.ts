@@ -110,6 +110,10 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       return NextResponse.json({ error: "Ce document a déjà été signé avec succès." }, { status: 400 });
     }
 
+    if (new Date() > sigReq.expiresAt) {
+      return NextResponse.json({ error: "Ce lien de signature a expiré." }, { status: 410 });
+    }
+
     const ip = req.headers.get("x-forwarded-for") || "127.0.0.1";
     const userAgent = req.headers.get("user-agent") || "Navigateur Client";
 

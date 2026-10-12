@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { guardEntity } from "@/lib/apiGuard";
 import { checkDocumentCompliance } from "@/lib/complianceEngine";
 import { computeDocumentHash, logAudit } from "@/lib/audit";
 import { AuditAction, DocumentStatus } from "@prisma/client";
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
+  const g = await guardEntity("document", params.id, "issue");
+  if (!g.ok) return g.response;
+  const { session, role } = g.access;
 
   const doc = await prisma.documentRecord.findUnique({
     where: { id: params.id },

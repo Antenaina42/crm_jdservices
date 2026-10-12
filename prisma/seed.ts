@@ -5,6 +5,11 @@ import crypto from "crypto";
 const prisma = new PrismaClient();
 
 async function main() {
+  if (process.env.NODE_ENV === "production") {
+    console.error("DANGER : Le seed ne doit JAMAIS être exécuté en environnement de production !");
+    process.exit(1);
+  }
+
   console.log("🌱 Début du peuplement de la base de données JD-SERVICES MANAGEMENT...");
 
   // 1. Mot de passe commun sécurisé pour la démonstration

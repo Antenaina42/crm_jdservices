@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { guardEntity } from "@/lib/apiGuard";
 import { calculateDocumentTotals } from "@/lib/taxEngine";
 import { logAudit } from "@/lib/audit";
 import { AuditAction } from "@prisma/client";
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
+  const g = await guardEntity("document", params.id, "read");
+  if (!g.ok) return g.response;
 
   const doc = await prisma.documentRecord.findUnique({
     where: { id: params.id },
@@ -32,8 +32,9 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 }
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
+  const g = await guardEntity("document", params.id, "write");
+  if (!g.ok) return g.response;
+  const { session, role } = g.access;
 
   const doc = await prisma.documentRecord.findUnique({
     where: { id: params.id },
@@ -119,7 +120,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     workspaceId: doc.workspaceId,
     userId: session.id,
     userEmail: session.email,
-    userRole: session.role,
+    userRole: role,
     action: AuditAction.UPDATED,
     entityType: "Document",
     entityId: doc.id,
@@ -132,8 +133,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
+  const g = await guardEntity("document", params.id, "delete");
+  if (!g.ok) return g.response;
+  const { session, role } = g.access;
 
   const doc = await prisma.documentRecord.findUnique({
     where: { id: params.id },
@@ -157,7 +159,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     workspaceId: doc.workspaceId,
     userId: session.id,
     userEmail: session.email,
-    userRole: session.role,
+    userRole: role,
     action: AuditAction.DELETED,
     entityType: "Document",
     entityId: doc.id,

@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword, setSessionCookie, SessionUser } from "@/lib/auth";
+import { checkRateLimit, recordFailure, resetRateLimit } from "@/lib/rateLimit";
 import { logAudit } from "@/lib/audit";
 import { AuditAction } from "@prisma/client";
+
+// Hash factice pour comparaison en temps constant (atténuation des attaques temporelles)
+const DUMMY_HASH = "$2a$10$e8wU.UqE8qN4uC5v3qA3tO2rI4a5s6d7f8g9h0j1k2l3m4n5o6p7q";
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,8 +16,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Email et mot de passe requis" }, { status: 400 });
     }
 
+    const normalizedEmail = String(email).toLowerCase().trim();
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "127.0.0.1";
+
+    // 1. Rate limiting par IP et par compte
+    const emailLimit = checkRateLimit(`login:email:${normalizedEmail}`, 5, 15 * 60 * 1000);
+    const ipLimit = checkRateLimit(`login:ip:${ip}`, 20, 15 * 60 * 1000);
+
+    if (!emailLimit.allowed || !ipLimit.allowed) {
+      const waitSeconds = Math.max(emailLimit.retryAfterSeconds, ipLimit.retryAfterSeconds);
+      return NextResponse.json(
+        {
+          error: `Trop de tentatives infructueuses. Veuillez patienter ${waitSeconds} seconde(s) avant de réessayer.`,
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(waitSeconds),
+          },
+        }
+      );
+    }
+
+    // 2. Recherche utilisateur
     const user = await prisma.user.findUnique({
-      where: { email: email.toLowerCase().trim() },
+      where: { email: normalizedEmail },
       include: {
         workspaceUsers: {
           include: {
@@ -25,19 +52,26 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    // 3. Vérification du mot de passe (temps constant en cas de compte inexistant ou inactif)
     if (!user || !user.isActive) {
-      return NextResponse.json({ error: "Identifiants invalides ou compte inactif" }, { status: 401 });
-    }
-
-    let isMatch = await verifyPassword(password, user.passwordHash);
-    if (!isMatch && (password === "Admin1234!" || password === "Password123!")) {
-      isMatch = await verifyPassword("Password123!", user.passwordHash);
-    }
-    if (!isMatch) {
+      await verifyPassword(String(password), DUMMY_HASH);
+      recordFailure(`login:email:${normalizedEmail}`);
+      recordFailure(`login:ip:${ip}`);
       return NextResponse.json({ error: "Identifiants invalides" }, { status: 401 });
     }
 
-    // Préparer la liste des espaces autorisés
+    const isMatch = await verifyPassword(String(password), user.passwordHash);
+    if (!isMatch) {
+      recordFailure(`login:email:${normalizedEmail}`);
+      recordFailure(`login:ip:${ip}`);
+      return NextResponse.json({ error: "Identifiants invalides" }, { status: 401 });
+    }
+
+    // 4. Succès : réinitialiser le compteur de tentatives
+    resetRateLimit(`login:email:${normalizedEmail}`);
+    resetRateLimit(`login:ip:${ip}`);
+
+    // 5. Préparer la liste des espaces autorisés
     let userWorkspaces: Array<{ workspaceId: string; slug: string; name: string; role: any }> = [];
 
     if (user.role === "SUPER_ADMIN") {
@@ -70,7 +104,7 @@ export async function POST(req: NextRequest) {
 
     await setSessionCookie(sessionPayload);
 
-    // Audit Log de connexion
+    // 6. Audit Log de connexion réussie
     await logAudit({
       userId: user.id,
       userEmail: user.email,
@@ -79,7 +113,7 @@ export async function POST(req: NextRequest) {
       entityType: "User",
       entityId: user.id,
       entityReference: `Connexion ${user.email}`,
-      newValue: { event: "Connexion réussie", ip: req.headers.get("x-forwarded-for") || "127.0.0.1" },
+      newValue: { event: "Connexion réussie", ip },
     });
 
     return NextResponse.json({

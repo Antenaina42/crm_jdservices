@@ -1,18 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { guardWorkspace, guardEntity } from "@/lib/apiGuard";
 
 export async function GET(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
-
   const { searchParams } = new URL(req.url);
   const workspaceId = searchParams.get("workspaceId");
 
-  if (!workspaceId) return NextResponse.json({ error: "workspaceId requis" }, { status: 400 });
+  const g = await guardWorkspace(workspaceId, "read");
+  if (!g.ok) return g.response;
 
   const items = await prisma.serviceCatalogItem.findMany({
-    where: { workspaceId },
+    where: { workspaceId: g.access.workspaceId },
     orderBy: { category: "asc" },
   });
 
@@ -20,22 +18,22 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
-
   const body = await req.json();
   const { workspaceId, code, category, name, description, unit = "Forfait", defaultPriceHt, defaultTaxRate = 20.0, frequency = "PONCTUELLE" } = body;
 
-  if (!workspaceId || !code || !name) {
+  const g = await guardWorkspace(workspaceId, "write");
+  if (!g.ok) return g.response;
+
+  if (!code || !name) {
     return NextResponse.json({ error: "Champs obligatoires manquants" }, { status: 400 });
   }
 
   const item = await prisma.serviceCatalogItem.create({
     data: {
-      workspaceId,
-      code: code.trim(),
-      category: category ? category.trim() : "GENERAL",
-      name: name.trim(),
+      workspaceId: g.access.workspaceId,
+      code: String(code).trim(),
+      category: category ? String(category).trim() : "GENERAL",
+      name: String(name).trim(),
       description: description || null,
       unit,
       defaultPriceHt: Number(defaultPriceHt) || 0,
@@ -49,11 +47,11 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
-
   const body = await req.json();
   const { id, defaultPriceHt, name, description, isActive } = body;
+
+  const g = await guardEntity("catalogItem", id, "write");
+  if (!g.ok) return g.response;
 
   const updated = await prisma.serviceCatalogItem.update({
     where: { id },
@@ -69,18 +67,13 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
-
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
-  if (!id) return NextResponse.json({ error: "ID requis" }, { status: 400 });
 
-  const existing = await prisma.serviceCatalogItem.findUnique({ where: { id } });
-  if (!existing) return NextResponse.json({ error: "Prestation introuvable" }, { status: 404 });
+  const g = await guardEntity("catalogItem", id, "delete");
+  if (!g.ok) return g.response;
 
-  await prisma.serviceCatalogItem.delete({ where: { id } });
+  await prisma.serviceCatalogItem.delete({ where: { id: id! } });
 
   return NextResponse.json({ success: true, message: "Prestation supprimée du catalogue" });
 }
-

@@ -1,23 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { guardWorkspace } from "@/lib/apiGuard";
 import { logAudit } from "@/lib/audit";
 import { AuditAction, ClientStatus } from "@prisma/client";
 
 export async function GET(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
-
   const { searchParams } = new URL(req.url);
   const workspaceId = searchParams.get("workspaceId");
   const query = searchParams.get("q") || "";
   const status = searchParams.get("status") as ClientStatus | null;
 
-  if (!workspaceId) return NextResponse.json({ error: "workspaceId requis" }, { status: 400 });
+  const g = await guardWorkspace(workspaceId, "read");
+  if (!g.ok) return g.response;
 
   // FILTRE STRICT SERVEUR : workspaceId OBLIGATOIRE
   const whereClause: any = {
-    workspaceId,
+    workspaceId: g.access.workspaceId,
   };
 
   if (status) {
@@ -50,9 +48,6 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
-
   try {
     const body = await req.json();
     const {
@@ -77,7 +72,11 @@ export async function POST(req: NextRequest) {
       notes,
     } = body;
 
-    if (!workspaceId || !lastName || !email || !phone || !address || !postalCode || !city) {
+    const g = await guardWorkspace(workspaceId, "write");
+    if (!g.ok) return g.response;
+    const { session, role } = g.access;
+
+    if (!lastName || !email || !phone || !address || !postalCode || !city) {
       return NextResponse.json(
         { error: "Veuillez renseigner tous les champs obligatoires (Nom, Email, Téléphone, Adresse, CP, Ville)" },
         { status: 400 }
@@ -86,31 +85,31 @@ export async function POST(req: NextRequest) {
 
     // Récupérer le workspace pour le préfixe
     const workspace = await prisma.workspace.findUnique({
-      where: { id: workspaceId },
+      where: { id: g.access.workspaceId },
       select: { slug: true },
     });
 
     if (!workspace) return NextResponse.json({ error: "Workspace introuvable" }, { status: 404 });
 
     const prefix = workspace.slug === "automobile" ? "CLI-AUTO" : "CLI-NET";
-    const count = await prisma.client.count({ where: { workspaceId } });
+    const count = await prisma.client.count({ where: { workspaceId: g.access.workspaceId } });
     const year = new Date().getFullYear();
     const clientNumber = `${prefix}-${year}-${String(count + 1).padStart(4, "0")}`;
 
     const client = await prisma.client.create({
       data: {
-        workspaceId,
+        workspaceId: g.access.workspaceId,
         clientNumber,
         isCompany: Boolean(isCompany),
         companyName: companyName || null,
         firstName: firstName || "",
-        lastName: lastName.trim(),
-        email: email.trim().toLowerCase(),
-        phone: phone.trim(),
-        address: address.trim(),
-        postalCode: postalCode.trim(),
-        city: city.trim(),
-        country: country.trim(),
+        lastName: String(lastName).trim(),
+        email: String(email).trim().toLowerCase(),
+        phone: String(phone).trim(),
+        address: String(address).trim(),
+        postalCode: String(postalCode).trim(),
+        city: String(city).trim(),
+        country: String(country).trim(),
         deliveryAddress: deliveryAddress || null,
         deliveryPostalCode: deliveryPostalCode || null,
         deliveryCity: deliveryCity || null,
@@ -124,10 +123,10 @@ export async function POST(req: NextRequest) {
     });
 
     await logAudit({
-      workspaceId,
+      workspaceId: g.access.workspaceId,
       userId: session.id,
       userEmail: session.email,
-      userRole: session.role,
+      userRole: role,
       action: AuditAction.CREATED,
       entityType: "Client",
       entityId: client.id,

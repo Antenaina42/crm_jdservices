@@ -4,9 +4,23 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { RoleEnum } from "@prisma/client";
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.AUTH_SECRET || "jd-services-super-secret-key-32-chars-minimum-2026-mgmt"
-);
+/**
+ * Secret de signature des sessions JWT.
+ * AUCUNE valeur de repli : AUTH_SECRET est obligatoire.
+ * Lecture paresseuse (à l'appel) afin que `next build` n'échoue pas si la variable
+ * n'est pas encore définie dans l'environnement de build.
+ */
+function getJwtSecret(): Uint8Array {
+  const secret = process.env.AUTH_SECRET;
+  if (!secret) {
+    throw new Error("AUTH_SECRET est obligatoire : définissez cette variable d'environnement (32 caractères aléatoires minimum).");
+  }
+  if (process.env.NODE_ENV === "production" && secret.length < 32) {
+    throw new Error("AUTH_SECRET trop court : 32 caractères minimum requis en production.");
+  }
+  return new TextEncoder().encode(secret);
+}
+
 
 const SESSION_COOKIE_NAME = "jd_session_token";
 
@@ -37,12 +51,12 @@ export async function createSessionToken(payload: SessionUser): Promise<string> 
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("7d")
-    .sign(JWT_SECRET);
+    .sign(getJwtSecret());
 }
 
 export async function verifySessionToken(token: string): Promise<SessionUser | null> {
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, getJwtSecret());
     return (payload as { user: SessionUser }).user || null;
   } catch {
     return null;

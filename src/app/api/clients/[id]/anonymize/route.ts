@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { guardEntity } from "@/lib/apiGuard";
 import { logAudit } from "@/lib/audit";
 import { AuditAction, ClientStatus } from "@prisma/client";
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
+  const g = await guardEntity("client", params.id, "delete");
+  if (!g.ok) return g.response;
+  const { session, role } = g.access;
 
   // Seul un SUPER_ADMIN ou ADMIN peut valider l'anonymisation RGPD
-  if (session.role !== "SUPER_ADMIN" && session.role !== "ADMIN") {
+  if (role !== "SUPER_ADMIN" && role !== "ADMIN") {
     return NextResponse.json(
       { error: "Droits insuffisants. Seul un administrateur peut valider une anonymisation RGPD." },
       { status: 403 }
@@ -45,7 +46,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     workspaceId: client.workspaceId,
     userId: session.id,
     userEmail: session.email,
-    userRole: session.role,
+    userRole: role,
     action: AuditAction.ANONYMIZED,
     entityType: "Client",
     entityId: client.id,

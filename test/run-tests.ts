@@ -8,6 +8,11 @@ import { getSignatureProvider } from "../src/lib/providers/signatureProvider";
 const prisma = new PrismaClient();
 
 async function runTests() {
+  if (process.env.NODE_ENV === "production") {
+    console.error("DANGER : Les tests ne doivent pas être exécutés sur la base de données de production !");
+    process.exit(1);
+  }
+
   console.log("==================================================");
   console.log("🚀 LANCEMENT DE LA SUITE DE TESTS JD-SERVICES MANAGEMENT");
   console.log("==================================================");

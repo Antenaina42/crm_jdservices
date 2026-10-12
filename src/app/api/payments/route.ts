@@ -1,20 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { guardWorkspace } from "@/lib/apiGuard";
 import { logAudit } from "@/lib/audit";
 import { AuditAction, DocumentStatus, PaymentMethod } from "@prisma/client";
 
 export async function GET(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
-
   const { searchParams } = new URL(req.url);
   const workspaceId = searchParams.get("workspaceId");
 
-  if (!workspaceId) return NextResponse.json({ error: "workspaceId requis" }, { status: 400 });
+  const g = await guardWorkspace(workspaceId, "read");
+  if (!g.ok) return g.response;
 
   const payments = await prisma.payment.findMany({
-    where: { workspaceId },
+    where: { workspaceId: g.access.workspaceId },
     include: {
       client: { select: { firstName: true, lastName: true, companyName: true, isCompany: true } },
       document: { select: { documentNumber: true, totalTtc: true, status: true, documentType: true } },
@@ -26,13 +24,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
-
   try {
     const body = await req.json();
     const {
-      workspaceId,
       documentId,
       amount,
       paymentMethod = PaymentMethod.TRANSFER,
@@ -41,7 +35,7 @@ export async function POST(req: NextRequest) {
       notes,
     } = body;
 
-    if (!workspaceId || !documentId || !amount || Number(amount) <= 0) {
+    if (!documentId || !amount || Number(amount) <= 0) {
       return NextResponse.json({ error: "Document et montant supérieur à 0 obligatoires" }, { status: 400 });
     }
 
@@ -50,6 +44,11 @@ export async function POST(req: NextRequest) {
     });
 
     if (!doc) return NextResponse.json({ error: "Document introuvable" }, { status: 404 });
+
+    // Isolation et permission : seul un utilisateur autorisé dans l'espace du document avec rôle payeur peut enregistrer un paiement
+    const g = await guardWorkspace(doc.workspaceId, "pay", true);
+    if (!g.ok) return g.response;
+    const { session, role, workspaceId } = g.access;
 
     const payAmount = Number(amount);
     const newTotalPaid = Math.round((doc.totalPaid + payAmount) * 100) / 100;
@@ -95,7 +94,7 @@ export async function POST(req: NextRequest) {
       workspaceId,
       userId: session.id,
       userEmail: session.email,
-      userRole: session.role,
+      userRole: role,
       action: newStatus === DocumentStatus.PAID ? AuditAction.PAID : AuditAction.PARTIALLY_PAID,
       entityType: "Document",
       entityId: doc.id,

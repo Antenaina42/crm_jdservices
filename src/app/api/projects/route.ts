@@ -1,20 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { guardWorkspace, guardEntity } from "@/lib/apiGuard";
 import { logAudit } from "@/lib/audit";
 import { AuditAction } from "@prisma/client";
 
 export async function GET(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
-
   const { searchParams } = new URL(req.url);
   const workspaceId = searchParams.get("workspaceId");
   const clientId = searchParams.get("clientId");
 
-  if (!workspaceId) return NextResponse.json({ error: "workspaceId requis" }, { status: 400 });
+  const g = await guardWorkspace(workspaceId, "read");
+  if (!g.ok) return g.response;
 
-  const whereClause: any = { workspaceId };
+  const whereClause: any = { workspaceId: g.access.workspaceId };
   if (clientId) whereClause.clientId = clientId;
 
   const projects = await prisma.project.findMany({
@@ -30,9 +28,6 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
-
   try {
     const body = await req.json();
     const {
@@ -71,17 +66,29 @@ export async function POST(req: NextRequest) {
       notes,
     } = body;
 
-    if (!workspaceId || !clientId || !title) {
-      return NextResponse.json({ error: "Workspace, client et titre sont obligatoires" }, { status: 400 });
+    const g = await guardWorkspace(workspaceId, "write");
+    if (!g.ok) return g.response;
+    const { session, role } = g.access;
+
+    if (!clientId || !title) {
+      return NextResponse.json({ error: "Client et titre sont obligatoires" }, { status: 400 });
     }
 
-    const count = await prisma.project.count({ where: { workspaceId } });
+    // Vérifier que le client appartient bien à ce workspace
+    const client = await prisma.client.findFirst({
+      where: { id: clientId, workspaceId: g.access.workspaceId },
+    });
+    if (!client) {
+      return NextResponse.json({ error: "Client introuvable dans cet espace" }, { status: 404 });
+    }
+
+    const count = await prisma.project.count({ where: { workspaceId: g.access.workspaceId } });
     const year = new Date().getFullYear();
     const projectNumber = `PRJ-${year}-${String(count + 1).padStart(4, "0")}`;
 
     const project = await prisma.project.create({
       data: {
-        workspaceId,
+        workspaceId: g.access.workspaceId,
         clientId,
         projectNumber,
         title,
@@ -120,10 +127,10 @@ export async function POST(req: NextRequest) {
     });
 
     await logAudit({
-      workspaceId,
+      workspaceId: g.access.workspaceId,
       userId: session.id,
       userEmail: session.email,
-      userRole: session.role,
+      userRole: role,
       action: AuditAction.CREATED,
       entityType: "Project",
       entityId: project.id,
@@ -139,13 +146,14 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
-
   try {
     const body = await req.json();
     const { id, title, status, notes } = body;
     if (!id) return NextResponse.json({ error: "ID du projet requis" }, { status: 400 });
+
+    const g = await guardEntity("project", id, "write");
+    if (!g.ok) return g.response;
+    const { session, role } = g.access;
 
     const existing = await prisma.project.findUnique({ where: { id } });
     if (!existing) return NextResponse.json({ error: "Projet introuvable" }, { status: 404 });
@@ -163,7 +171,7 @@ export async function PUT(req: NextRequest) {
       workspaceId: existing.workspaceId,
       userId: session.id,
       userEmail: session.email,
-      userRole: session.role,
+      userRole: role,
       action: AuditAction.UPDATED,
       entityType: "Project",
       entityId: existing.id,
@@ -179,12 +187,13 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
-
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "ID requis" }, { status: 400 });
+
+  const g = await guardEntity("project", id, "delete");
+  if (!g.ok) return g.response;
+  const { session, role } = g.access;
 
   const project = await prisma.project.findUnique({
     where: { id },
@@ -206,7 +215,7 @@ export async function DELETE(req: NextRequest) {
     workspaceId: project.workspaceId,
     userId: session.id,
     userEmail: session.email,
-    userRole: session.role,
+    userRole: role,
     action: AuditAction.DELETED,
     entityType: "Project",
     entityId: project.id,
@@ -215,4 +224,3 @@ export async function DELETE(req: NextRequest) {
 
   return NextResponse.json({ success: true, message: "Projet supprimé" });
 }
-

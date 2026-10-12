@@ -5,7 +5,9 @@ import TaxSettingsClient from "@/components/settings/TaxSettingsClient";
 
 export default async function TaxSettingsPage() {
   const session = await getSession();
-  if (!session) redirect("/login");
+  if (!session || (session.role !== "SUPER_ADMIN" && session.role !== "ADMIN")) {
+    redirect("/workspace-select");
+  }
 
   const [taxRates, workspaces] = await Promise.all([
     prisma.taxRate.findMany({
